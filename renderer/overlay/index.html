@@ -74,9 +74,53 @@
       transition: transform 0.1s ease-out;
       will-change: transform;
     }
+
+    /* ── Estados de voz ── */
+    #voice-label {
+      position: absolute;
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      font-size: 9px;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2px 8px;
+      border-radius: 8px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    #voice-label.visible { opacity: 1; }
+
+    /* Escuchando → verde */
+    body[data-voice="listening"] #pulse {
+      border-color: rgba(52, 211, 153, 0.55);
+      animation: pulse-voice 0.9s ease-out infinite;
+    }
+    body[data-voice="listening"] #btn {
+      box-shadow: 0 0 0 2px rgba(52,211,153,0.25), 0 2px 8px rgba(0,0,0,0.6);
+    }
+
+    /* Procesando → índigo */
+    body[data-voice="processing"] #pulse {
+      border-color: rgba(99, 102, 241, 0.6);
+      animation: pulse-voice 0.5s ease-out infinite;
+    }
+    body[data-voice="processing"] #btn {
+      box-shadow: 0 0 0 2px rgba(99,102,241,0.3), 0 2px 8px rgba(0,0,0,0.6);
+    }
+
+    @keyframes pulse-voice {
+      0%   { transform: scale(1);    opacity: 0.8; }
+      70%  { transform: scale(1.45); opacity: 0;   }
+      100% { transform: scale(1.45); opacity: 0;   }
+    }
   </style>
 </head>
 <body>
+  <div id="voice-label"></div>
   <div id="btn">
     <div id="pulse"></div>
 
@@ -167,6 +211,154 @@
       e.preventDefault()
       if (!hasMoved) window.api.send('overlay-click-right')
     })
+
+    // ─── SISTEMA DE VOZ ──────────────────────────────────────────────────────
+
+    const voiceLabel  = document.getElementById('voice-label')
+    let voiceState    = 'idle'   // 'idle' | 'listening' | 'processing'
+    let recognition   = null
+    let mediaRecorder = null
+    let audioChunks   = []
+    let recordTimer   = null
+
+    function setVoiceState(state, label = '') {
+      voiceState = state
+      document.body.dataset.voice = state
+      voiceLabel.textContent = label
+      voiceLabel.classList.toggle('visible', label !== '')
+    }
+
+    function initWakeWord() {
+      const SR = window.webkitSpeechRecognition || window.SpeechRecognition
+      if (!SR) { console.warn('[VOZ] Web Speech API no disponible'); return }
+
+      recognition = new SR()
+      recognition.continuous    = true
+      recognition.interimResults = true
+      recognition.lang          = 'es-ES'
+
+      recognition.onresult = (e) => {
+        if (voiceState !== 'idle') return
+        const transcript = e.results[e.results.length - 1][0].transcript.toLowerCase()
+        if (transcript.includes('iris')) wakeWordDetected()
+      }
+
+      recognition.onerror = (e) => {
+        if (e.error !== 'not-allowed' && voiceState === 'idle') restartRecognition()
+      }
+
+      recognition.onend = () => {
+        if (voiceState === 'idle') restartRecognition()
+      }
+
+      recognition.start()
+      console.log('[VOZ] Wake word activo — di "Iris" para activar')
+    }
+
+    function restartRecognition() {
+      setTimeout(() => { try { recognition?.start() } catch (_) {} }, 400)
+    }
+
+    async function wakeWordDetected() {
+      if (voiceState !== 'idle') return
+      recognition?.stop()
+      setVoiceState('listening', 'Escuchando...')
+
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      } catch (e) {
+        console.error('[VOZ] Micrófono denegado:', e.message)
+        setVoiceState('idle')
+        restartRecognition()
+        return
+      }
+
+      audioChunks = []
+
+      // Detección de silencio con AudioContext
+      const audioCtx  = new AudioContext()
+      const source    = audioCtx.createMediaStreamSource(stream)
+      const analyser  = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      const dataArr   = new Uint8Array(analyser.frequencyBinCount)
+      let silenceStart = null
+      let hasSpoken    = false
+
+      mediaRecorder = new MediaRecorder(stream)
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
+      mediaRecorder.onstop = async () => {
+        clearInterval(silenceCheck)
+        clearTimeout(recordTimer)
+        stream.getTracks().forEach(t => t.stop())
+        audioCtx.close()
+        await processVoiceCommand()
+      }
+      mediaRecorder.start(250)
+
+      // Límite máximo de 8 segundos
+      recordTimer = setTimeout(() => {
+        if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+      }, 8000)
+
+      // Para automáticamente tras 1.5s de silencio (después de haber hablado)
+      const silenceCheck = setInterval(() => {
+        analyser.getByteFrequencyData(dataArr)
+        const vol = dataArr.reduce((a, b) => a + b, 0) / dataArr.length
+        if (vol > 12) { hasSpoken = true; silenceStart = null }
+        else if (hasSpoken) {
+          if (!silenceStart) silenceStart = Date.now()
+          else if (Date.now() - silenceStart > 1500) {
+            if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+          }
+        }
+      }, 80)
+    }
+
+    async function processVoiceCommand() {
+      setVoiceState('processing', 'Pensando...')
+
+      // Convertir audio a base64
+      const blob   = new Blob(audioChunks, { type: 'audio/webm' })
+      const buffer = await blob.arrayBuffer()
+      const uint8  = new Uint8Array(buffer)
+      let binary   = ''
+      for (let i = 0; i < uint8.length; i += 8192) {
+        binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, uint8.length)))
+      }
+      const audioBase64 = btoa(binary)
+
+      try {
+        const result = await window.api.invoke('voice-command', { audioBase64 })
+        if (result?.error) {
+          console.error('[VOZ] Error:', result.error)
+        } else {
+          speak(result.response)
+          // Muestra brevemente lo que entendió
+          setVoiceState('idle', `"${(result.transcription || '').slice(0, 28)}"`)
+          setTimeout(() => setVoiceState('idle', ''), 4000)
+        }
+      } catch (e) {
+        console.error('[VOZ] Error enviando comando:', e.message)
+      }
+
+      if (voiceState === 'processing') setVoiceState('idle')
+      restartRecognition()
+    }
+
+    function speak(text) {
+      if (!text || !('speechSynthesis' in window)) return
+      speechSynthesis.cancel()
+      const u  = new SpeechSynthesisUtterance(text.slice(0, 500))
+      u.lang   = 'es-ES'
+      u.rate   = 1.05
+      u.pitch  = 1.0
+      speechSynthesis.speak(u)
+    }
+
+    // Iniciar escucha pasiva 1.5s después de cargar
+    setTimeout(initWakeWord, 1500)
   </script>
 </body>
 </html>

@@ -24,6 +24,13 @@ if (!gotLock) {
 
 app.whenReady().then(() => {
   cleanBadMemoryEntries()
+
+  // Auto-conceder permiso de micrófono al overlay
+  const { session } = require('electron')
+  session.defaultSession.setPermissionRequestHandler((_, permission, callback) => {
+    callback(permission === 'media')
+  })
+
   createTray()
   createOverlay()
   checkLogin()
@@ -131,7 +138,8 @@ function createOverlay() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   })
 
@@ -599,6 +607,81 @@ ipcMain.handle('delete-chat', (_, { chatId }) => {
   store.set(`chats_${userId}`, store.get(`chats_${userId}`, []).filter(c => c.id !== chatId))
   store.delete(`chatmsgs_${chatId}`)
   return true
+})
+
+ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
+  const { transcribeAudio }                           = require('./voiceListener')
+  const { askGemini, detectarNecesidadVisual }        = require('./gemini')
+  const { getMemory, saveMemory, getRawMemory }       = require('./memory')
+  const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
+
+  const userId = getActiveUserId()
+  const memory = getMemory(userId)
+  const chat   = getOrCreateActiveChat(userId)
+  const recentHistory = chat.messages.slice(-6)
+
+  // 1. Transcribir audio con Groq Whisper
+  let message
+  try {
+    message = await transcribeAudio(audioBase64)
+  } catch (e) {
+    console.log('[VOZ] Error transcripción:', e.message)
+    return { error: 'No pude entenderte: ' + e.message }
+  }
+  if (!message) return { error: 'No detecté ninguna pregunta' }
+
+  // 2. Clasificar y obtener contexto vectorial
+  const necesitaVision = await detectarNecesidadVisual(message)
+  let screenshotBase64 = null
+  if (necesitaVision) {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } })
+      if (sources.length) { screenshotBase64 = sources[0].thumbnail.toJPEG(70).toString('base64') }
+    } catch (_) {}
+  }
+
+  const vectorContext = await buscarRecuerdoVectorial(userId, chat.game, message)
+
+  // 3. Llamar al modelo
+  let aiResult
+  try {
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext)
+  } catch (e) {
+    return { error: 'Error IA: ' + e.message }
+  }
+
+  const response   = aiResult.text
+  const visionUsed = aiResult.vision
+  const timestamp  = Date.now()
+
+  chat.messages.push({ timestamp, question: message, answer: response, vision: visionUsed, voice: true })
+  chat.updatedAt = timestamp
+  if (chat.messages.length > 200) chat.messages.splice(0, chat.messages.length - 200)
+
+  await saveMemory(userId, message, response, memory)
+  guardarRecuerdoVectorial(userId, chat.game, `P: ${message}\nR: ${response}`).catch(() => {})
+
+  const updatedMem   = getRawMemory(userId)
+  const gameEntries  = Object.entries(updatedMem || {})
+    .filter(([n]) => n && n.toLowerCase() !== 'null' && n.toLowerCase() !== 'unknown')
+    .sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
+  const currentGame  = gameEntries[0]?.[0] || null
+
+  if (currentGame && (chat.title === 'Nueva conversación' || !chat.game)) {
+    chat.title = currentGame; chat.game = currentGame
+  } else if (chat.title === 'Nueva conversación' && chat.messages.length === 1) {
+    chat.title = message.length > 40 ? message.slice(0, 40) + '…' : message
+  }
+
+  const chats = store.get(`chats_${userId}`, [])
+  const idx   = chats.findIndex(c => c.id === chat.id)
+  const meta  = { id: chat.id, title: chat.title, game: chat.game, createdAt: chat.createdAt, updatedAt: timestamp, messageCount: chat.messages.length, preview: response.slice(0, 80) }
+  if (idx >= 0) chats[idx] = meta; else chats.unshift(meta)
+  if (chats.length > 50) chats.splice(50)
+  store.set(`chats_${userId}`, chats)
+  store.set(`chatmsgs_${chat.id}`, chat.messages)
+
+  return { response, transcription: message, currentGame, visionUsed }
 })
 
 ipcMain.handle('clear-history', () => {
