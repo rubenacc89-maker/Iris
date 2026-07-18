@@ -1,7 +1,7 @@
 {
-  "name": "gaming-ai-overlay",
-  "version": "1.0.0",
-  "description": "Asistente IA para gamers con overlay flotante",
+  "name": "iris-overlay",
+  "version": "0.1.0",
+  "description": "Universal AI overlay assistant for gamers. Real-time screen analysis, intelligent visual classifier and persistent memory.",
   "main": "src/main.js",
   "scripts": {
     "start": "set ELECTRON_RUN_AS_NODE= && electron .",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.gamingai.overlay",
-    "productName": "Gaming AI",
+    "productName": "Iris",
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico"
@@ -40,8 +40,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "tu-usuario",
-      "repo": "gaming-ai-overlay"
+      "owner": "rubenacc89-maker",
+      "repo": "Iris"
     }
   }
 }
