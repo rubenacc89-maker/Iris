@@ -1,0 +1,7 @@
+﻿OBRA: Iris - Gaming AI Overlay
+AUTOR: Ruben Caceres
+FECHA: 2026-07-18
+DESCRIPCION: Aplicacion de escritorio (Electron) que actua como asistente de IA universal para gamers.
+Incluye overlay flotante siempre visible, clasificador inteligente de vision, memoria vectorial,
+sistema de chats persistente y soporte multimodelo (Gemini + Groq).
+TODOS LOS DERECHOS RESERVADOS.

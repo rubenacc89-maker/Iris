@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 360px;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+      width: 360px;
+    }
+
+    .bubble-user {
+      align-self: flex-end;
+      background: rgba(255, 255, 255, 0.93);
+      color: #111;
+      padding: 9px 14px;
+      border-radius: 18px 18px 4px 18px;
+      font-size: 13px;
+      max-width: 310px;
+      line-height: 1.45;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+      animation: fadeIn 0.2s ease;
+      word-break: break-word;
+    }
+
+    .bubble-user.fading { animation: fadeOut 1s ease forwards; }
+
+    .bubble-ai {
+      align-self: flex-start;
+      background: rgba(22, 20, 44, 0.95);
+      color: #e8e8ff;
+      padding: 10px 14px;
+      border-radius: 18px 18px 18px 4px;
+      font-size: 13px;
+      max-width: 330px;
+      line-height: 1.55;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.5);
+      animation: fadeIn 0.3s ease;
+      border: 1px solid rgba(90, 79, 207, 0.35);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .bubble-ai .action {
+      display: block;
+      margin-top: 7px;
+      font-size: 11px;
+      color: #f0c040;
+      cursor: pointer;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 6px;
+    }
+
+    .bubble-ai .action:hover { text-decoration: underline; }
+    .bubble-ai.fading { animation: fadeOut 1s ease forwards; }
+
+    #input-area {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(20, 18, 40, 0.93);
+      border: 1px solid rgba(90, 79, 207, 0.5);
+      border-radius: 22px;
+      padding: 8px 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.4);
+    }
+
+    #input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    #input::placeholder { color: rgba(255,255,255,0.35); }
+
+    #send-btn {
+      background: rgba(90, 79, 207, 0.85);
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    #send-btn:hover { background: rgba(90, 79, 207, 1); }
+
+    #send-btn svg { width: 14px; height: 14px; fill: white; }
+
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: #a09fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 7px;
+      vertical-align: middle;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="input-area">
+      <input id="input" type="text" placeholder="Pregúntame algo del juego..." autofocus maxlength="500" />
+      <button id="send-btn">
+        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const container = document.getElementById('container')
+    const inputArea = document.getElementById('input-area')
+    const input = document.getElementById('input')
+    const sendBtn = document.getElementById('send-btn')
+
+    let fadeTimer = null
+    let aiBubble = null
+    let userBubble = null
+    let isHovering = false
+
+    function resize() {
+      const h = container.scrollHeight + 4
+      window.api.send('resize-chat', { height: h })
+    }
+
+    async function sendMessage() {
+      const text = input.value.trim()
+      if (!text) return
+
+      input.value = ''
+      input.disabled = true
+      sendBtn.disabled = true
+      clearTimeout(fadeTimer)
+
+      // Burbuja usuario
+      if (userBubble) userBubble.remove()
+      userBubble = document.createElement('div')
+      userBubble.className = 'bubble-user'
+      userBubble.textContent = text
+      container.insertBefore(userBubble, inputArea)
+      resize()
+
+      setTimeout(() => {
+        if (userBubble) {
+          userBubble.classList.add('fading')
+          setTimeout(() => { userBubble?.remove(); userBubble = null; resize() }, 1000)
+        }
+      }, 2500)
+
+      // Burbuja IA con spinner
+      if (aiBubble) aiBubble.remove()
+      aiBubble = document.createElement('div')
+      aiBubble.className = 'bubble-ai'
+      aiBubble.innerHTML = '<span class="spinner"></span>Pensando...'
+      container.insertBefore(aiBubble, inputArea)
+      resize()
+
+      try {
+        const result = await window.api.invoke('send-message', { message: text })
+
+        aiBubble.innerHTML = escapeHtml(result.response) + '<span class="action" onclick="openHistory()">Ver historial →</span>'
+        resize()
+        startFadeTimer()
+      } catch (err) {
+        aiBubble.textContent = 'Error: ' + (err?.message || String(err))
+        resize()
+        startFadeTimer()
+      }
+
+      input.disabled = false
+      sendBtn.disabled = false
+      input.focus()
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    }
+
+    function startFadeTimer() {
+      clearTimeout(fadeTimer)
+      fadeTimer = setTimeout(() => {
+        if (!isHovering && aiBubble) {
+          aiBubble.classList.add('fading')
+          setTimeout(() => {
+            aiBubble?.remove()
+            aiBubble = null
+            setTimeout(() => {
+              if (!document.querySelector('.bubble-ai') && !document.querySelector('.bubble-user')) {
+                window.api.send('close-chat')
+              }
+            }, 400)
+          }, 1000)
+        }
+      }, 7000)
+    }
+
+    document.addEventListener('mouseenter', () => { isHovering = true; clearTimeout(fadeTimer) })
+    document.addEventListener('mouseleave', () => {
+      isHovering = false
+      if (aiBubble && !aiBubble.classList.contains('fading')) startFadeTimer()
+    })
+
+    function openHistory() { window.api.send('overlay-click-right') }
+
+    sendBtn.addEventListener('click', sendMessage)
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendMessage()
+      if (e.key === 'Escape') window.api.send('close-chat')
+    })
+
+    window.addEventListener('load', () => { resize(); input.focus() })
+
+    window.api.on('vector-memory-full', ({ juego }) => {
+      const notice = document.createElement('div')
+      notice.className = 'bubble-ai'
+      notice.style.cssText = 'border-color:rgba(251,191,36,0.4);color:#fbbf24;font-size:12px'
+      notice.textContent = `Memoria llena para "${juego}" (200/200). Los recuerdos anteriores se conservan pero no se pueden agregar más.`
+      container.insertBefore(notice, inputArea)
+      resize()
+      setTimeout(() => { notice.remove(); resize() }, 8000)
+    })
+  </script>
+</body>
+</html>

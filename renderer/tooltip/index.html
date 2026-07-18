@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: transparent;
+      width: 280px;
+      height: 68px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 10px 14px 0px 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #bubble {
+      position: relative;
+      background: rgba(10, 10, 10, 0.92);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 20px;
+      padding: 10px 16px;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #e8e8e8;
+      white-space: nowrap;
+      /* sin shadow */
+
+      opacity: 0;
+      transform: translateX(6px);
+      animation: fadeIn 0.35s ease forwards;
+    }
+
+    #bubble.hiding {
+      animation: fadeUp 0.8s ease forwards;
+    }
+
+    #cursor {
+      display: inline-block;
+      width: 1px;
+      height: 13px;
+      background: rgba(255,255,255,0.6);
+      margin-left: 1px;
+      vertical-align: middle;
+      animation: blink 0.6s step-end infinite;
+    }
+
+    #cursor.hidden { display: none; }
+
+    /* Flechita apuntando hacia abajo-derecha */
+    #bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      right: 18px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid rgba(10,10,10,0.92);
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 1; transform: translateY(0); }
+      to   { opacity: 0; transform: translateY(-14px); }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="bubble"><span id="text"></span><span id="cursor"></span></div>
+
+  <script>
+    const CHAR_DELAY   = 45   // ms por letra
+    const DISPLAY_TIME = 6000 // tiempo visible después de terminar de escribir
+    const FADE_TIME    = 800  // duración del fade-out
+
+    let fullText = '¡Hola! ¿Qué hacemos hoy?'
+    let charIndex = 0
+    let hideTimer = null
+
+    function startTypewriter() {
+      const textEl   = document.getElementById('text')
+      const cursorEl = document.getElementById('cursor')
+
+      const interval = setInterval(() => {
+        charIndex++
+        textEl.textContent = fullText.slice(0, charIndex)
+
+        if (charIndex >= fullText.length) {
+          clearInterval(interval)
+          // Cursor parpadea 1 segundo más y luego desaparece
+          setTimeout(() => cursorEl.classList.add('hidden'), 1000)
+
+          // Programar desaparición
+          hideTimer = setTimeout(hideBubble, DISPLAY_TIME)
+        }
+      }, CHAR_DELAY)
+    }
+
+    function hideBubble() {
+      document.getElementById('bubble').classList.add('hiding')
+      setTimeout(() => window.api.send('tooltip-dismiss'), FADE_TIME)
+    }
+
+    window.api.on('show-tooltip', (data) => {
+      const name = data && data.firstName ? data.firstName : null
+      fullText = name ? `¡Hola ${name}! ¿Qué hacemos hoy?` : '¡Hola! ¿Qué hacemos hoy?'
+      // Empezar a escribir 100ms después del fade-in
+      setTimeout(startTypewriter, 100)
+    })
+
+    document.getElementById('bubble').addEventListener('click', () => {
+      clearTimeout(hideTimer)
+      window.api.send('tooltip-click')
+    })
+  </script>
+</body>
+</html>

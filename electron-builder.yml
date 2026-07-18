@@ -1,0 +1,37 @@
+appId: com.gamingai.overlay
+productName: Gaming AI
+copyright: Copyright © 2026
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - src/**/*
+  - renderer/**/*
+  - assets/**/*
+  - package.json
+  - "!node_modules/.cache"
+
+win:
+  target:
+    - target: nsis
+      arch: x64
+  icon: assets/icons/icon.ico
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Gaming AI
+  installerIcon: assets/icons/icon.ico
+  uninstallerIcon: assets/icons/icon.ico
+
+publish:
+  provider: github
+  owner: tu-usuario-github
+  repo: gaming-ai-overlay
+  releaseType: release
