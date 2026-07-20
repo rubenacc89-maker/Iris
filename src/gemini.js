@@ -21,7 +21,7 @@ function getGemini() {
 async function detectarNecesidadVisual(pregunta) {
   try {
     const completion = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [
         {
           role: 'system',
@@ -57,14 +57,13 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
     }
   } catch (_) {}
 
-  const systemPrompt = `Sos un amigo gamer que sabe mucho de videojuegos. Hablás de forma natural y directa, como en una conversación entre amigos jugando.
+  const systemPrompt = `${game ? `JUEGO ACTIVO: ${game}\nRespondé SIEMPRE sobre ${game}. No uses información ni ítems de otros juegos aunque los tengas en memoria.\n\n` : ''}Sos un amigo gamer que sabe mucho de videojuegos. Hablás de forma natural y directa, como en una conversación entre amigos jugando.
 
 TONO Y ESTILO — MUY IMPORTANTE:
 - JAMÁS uses frases formales como "Basándome en...", "Según la evidencia...", "Conclusión:", "Posibles juegos:", "Análisis del juego". Eso es robótico y aburrido.
 - No uses palabras como "proporcionado", "en cuestión", "asemeja", "cabe destacar". Hablá normal.
 - NUNCA menciones "la captura", "la imagen", "la pantalla", "el screenshot". Simplemente sabés lo que está pasando.
 - Empezá directo al punto. Sin introducciones. Sin contexto innecesario.
-- Si algo es obvio, no lo expliques. Si el juego es Albion Online, sabés que es Albion Online.
 
 CUÁNDO SER CORTO vs DETALLADO:
 - Mensajes sociales ("ok", "dale", "gracias", "chao", "bueno", "entendido", "joya", "re", "np", "genial"): respondé SOLO con 2-5 palabras naturales. Ejemplos: "ok" → "dale, cualquier cosa avisás", "gracias" → "de nada, suerte!", "chao" → "¡hasta la próxima!". JAMÁS repitas el consejo anterior en estos casos.
@@ -80,17 +79,11 @@ LO QUE SÍ PODÉS VER:
 - Misiones activas con sus nombres exactos
 - Si no ves algo claramente, decí "no lo veo bien" sin más explicación
 
-CONOCIMIENTO DE ALBION ONLINE:
-- Keepers (Guardianes) = mobs del bioma forestal, zonas verdes cerca de Thetford
-- Para misiones de matar Keepers: cualquier zona verde/bosque sirve, no necesitás nombres específicos
-- Tipos de Keepers: Druida, Lanzachachas, Guerrero Keeper, Bravos Keeper, Doncella del hacha
-- Los jugadores nuevos arrancan en Thetford, bioma forestal
-
 CONOCIMIENTO TÉCNICO DE IRIS (para responder si el usuario pregunta):
 - Si el atajo de voz no funciona en un juego competitivo: puede ser que el anti-cheat bloquee la tecla. La solución es usar los botones laterales del ratón (Mouse4/Mouse5) — se cambia desde el panel → ⚙ Config.
 - Si el overlay no se ve encima del juego: el juego tiene que estar en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
 - Si pregunta cómo configurar algo: panel de historial → ⚙ Config.
-${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a esta pregunta]:\n${vectorContext}` : ''}`
+${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a esta pregunta — solo usarlo si es de ${game || 'este juego'}]:\n${vectorContext}` : ''}`
 
   // Build conversation messages with history for context
   const messages = [{ role: 'system', content: systemPrompt }]
@@ -123,34 +116,44 @@ ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a
   }
 
   messages.push({ role: 'user', content: userText })
-  try {
-    const completion = await getGroq().chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: 500
-    })
-    return { text: completion.choices[0].message.content.trim(), vision: false }
-  } catch (err) {
-    const msg = err.message || String(err)
-    if (msg.includes('401')) return { text: 'Error: API Key de Groq inválida.', vision: false }
-    if (msg.includes('429')) return { text: 'Límite alcanzado. Intentá en un momento.', vision: false }
-    return { text: 'Error: ' + msg.substring(0, 120), vision: false }
+
+  const GROQ_MODELS = [
+    'llama-3.1-8b-instant',
+    'llama-3.2-1b-preview',
+    'gemma2-9b-it',
+  ]
+
+  for (const model of GROQ_MODELS) {
+    try {
+      const completion = await getGroq().chat.completions.create({ model, messages, max_tokens: 500 })
+      if (model !== GROQ_MODELS[0]) console.log(`[IRIS] Usando modelo fallback: ${model}`)
+      return { text: completion.choices[0].message.content.trim(), vision: false }
+    } catch (err) {
+      const msg = err.message || String(err)
+      if (msg.includes('401')) return { text: 'Error: API Key de Groq inválida.', vision: false }
+      if (msg.includes('429')) { console.log(`[IRIS] 429 en ${model}, probando siguiente...`); continue }
+      return { text: 'Error: ' + msg.substring(0, 120), vision: false }
+    }
   }
+
+  return { text: 'Todos los modelos están ocupados en este momento, intentá en unos segundos.', vision: false }
 }
 
 function buildMemoryContext(memory) {
   if (!memory || Object.keys(memory).length === 0) return ''
 
-  // Detectar juego más reciente
-  const games = Object.entries(memory).sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
+  const games = Object.entries(memory)
+    .filter(([n]) => n && n.toLowerCase() !== 'null' && n.toLowerCase() !== 'unknown')
+    .sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
   if (!games.length) return ''
 
   const [currentGame, data] = games[0]
-  const lines = [`Juego actual: ${currentGame}`]
+  const lines = [`\n[Memoria de ${currentGame} — solo aplicar a preguntas sobre ${currentGame}]:`]
 
   if (data.notes?.length) {
-    lines.push('Notas recordadas de este juego:')
     data.notes.slice(-5).forEach(n => lines.push(`- ${n}`))
+  } else {
+    lines.push('(sin notas guardadas aún)')
   }
 
   return lines.join('\n')

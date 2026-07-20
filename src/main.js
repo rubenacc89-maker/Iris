@@ -530,6 +530,32 @@ function getOrCreateActiveChat(userId) {
   return activeChat
 }
 
+// Si existe una sesión de hoy para ese juego, la retoma en vez de crear un chat nuevo
+function switchToGameSession(userId, gameName) {
+  if (!gameName) return
+  if (activeChat?.game === gameName) return
+
+  const today = new Date().toDateString()
+  const chats = store.get(`chats_${userId}`, [])
+  const todaySession = chats.find(c =>
+    c.game === gameName &&
+    new Date(c.updatedAt || c.createdAt).toDateString() === today
+  )
+
+  if (todaySession) {
+    const messages = store.get(`chatmsgs_${todaySession.id}`, [])
+    activeChat = {
+      id:        todaySession.id,
+      title:     todaySession.title,
+      game:      todaySession.game,
+      createdAt: todaySession.createdAt,
+      updatedAt: todaySession.updatedAt,
+      messages
+    }
+    console.log(`[IRIS] Retomando sesión de hoy: ${gameName}`)
+  }
+}
+
 ipcMain.handle('google-login', async (_, { remember = true } = {}) => {
   try {
     const { startGoogleAuthFlow }     = require('./google-auth')
@@ -584,15 +610,16 @@ ipcMain.handle('send-message', async (_, { message }) => {
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
-  const chat   = getOrCreateActiveChat(userId)
 
-  // Detección inmediata por alias para que Gemini tenga contexto correcto desde el primer mensaje
+  // Detectar juego por alias e intentar reusar la sesión de hoy para ese juego
   const _quickGame = detectGameFromText(message)
   if (_quickGame) {
     if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
     else memory[_quickGame].lastPlayed = Date.now()
+    switchToGameSession(userId, _quickGame)
   }
 
+  const chat = getOrCreateActiveChat(userId)
   const recentHistory = chat.messages.slice(-6)
 
   // 1. Clasificar si la pregunta requiere ver la pantalla
@@ -735,8 +762,6 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
-  const chat   = getOrCreateActiveChat(userId)
-  const recentHistory = chat.messages.slice(-6)
 
   // 1. Transcribir audio con Groq Whisper
   let message
@@ -748,12 +773,16 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   }
   if (!message) return { error: 'No detecté ninguna pregunta' }
 
-  // Detección inmediata por alias para que Gemini tenga contexto correcto
+  // Detectar juego por alias e intentar reusar la sesión de hoy para ese juego
   const _quickGame = detectGameFromText(message)
   if (_quickGame) {
     if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
     else memory[_quickGame].lastPlayed = Date.now()
+    switchToGameSession(userId, _quickGame)
   }
+
+  const chat = getOrCreateActiveChat(userId)
+  const recentHistory = chat.messages.slice(-6)
 
   // 2. Clasificar y obtener contexto vectorial
   const necesitaVision = await detectarNecesidadVisual(message)
