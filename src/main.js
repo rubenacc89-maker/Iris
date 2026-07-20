@@ -841,6 +841,38 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 ipcMain.handle('get-tip-dismissed', (_, key) => store.get(`tip_dismissed_${key}`, false))
 ipcMain.handle('dismiss-tip', (_, key) => { store.set(`tip_dismissed_${key}`, true) })
 
+const DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1528768906322509938/51hYtrxUv9_Z0OtuNd43xUVcmy2dMd4scGLfB4LMnZXrsgVnYw1ubutRe5yvANbRJhGJ'
+
+ipcMain.handle('send-feedback', async (_, { message, game }) => {
+  try {
+    const { version } = require('../package.json')
+    const session = store.get('user_session') || tempSession
+    const username = session?.name || session?.email || 'Anónimo'
+    const body = {
+      embeds: [{
+        title: '💬 Feedback de usuario',
+        description: message,
+        color: 0x38bdf8,
+        fields: [
+          { name: 'Usuario', value: username, inline: true },
+          { name: 'Juego', value: game || '—', inline: true },
+          { name: 'Versión', value: `v${version}`, inline: true },
+        ],
+        timestamp: new Date().toISOString()
+      }]
+    }
+    const res = await fetch(DISCORD_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!res.ok) return { error: `Error ${res.status}` }
+    return { ok: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
 ipcMain.handle('clear-history', () => {
   if (activeChat) { activeChat.messages = [] }
   const userId = getActiveUserId()

@@ -578,6 +578,34 @@
     }
     #settings-content.active { display: flex; }
 
+    #feedback-content {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      padding: 16px;
+      gap: 12px;
+    }
+    #feedback-content.active { display: flex; }
+
+    #feedback-textarea {
+      flex: 1;
+      min-height: 120px;
+      max-height: 220px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      line-height: 1.6;
+      transition: border-color 0.15s;
+    }
+    #feedback-textarea:focus { border-color: rgba(56,189,248,0.4); }
+    #feedback-textarea::placeholder { color: var(--text3); }
+
     .setting-block {
       background: rgba(255,255,255,0.04);
       border: 1px solid var(--border);
@@ -697,6 +725,7 @@
       <div class="tab active" onclick="switchTab('chat')">Conversación</div>
       <div class="tab" onclick="switchTab('memory')">Juegos</div>
       <div class="tab" onclick="switchTab('settings')">⚙ Config</div>
+      <div class="tab" onclick="switchTab('feedback')">Ayuda & Bugs</div>
     </div>
 
     <div id="memory-bar">
@@ -722,6 +751,7 @@
       </div>
     </div>
     <div id="settings-content"></div>
+    <div id="feedback-content"></div>
 
     <!-- Snackbar reutilizable -->
     <div id="snackbar" style="display:none;margin:0 10px 8px;border-radius:8px;background:rgba(15,20,30,0.97);border:1px solid rgba(56,189,248,0.2);box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:12px 14px;animation:snack-in 0.2s ease">
@@ -760,14 +790,17 @@
         t.classList.toggle('active',
           (i === 0 && tab === 'chat') ||
           (i === 1 && tab === 'memory') ||
-          (i === 2 && tab === 'settings'))
+          (i === 2 && tab === 'settings') ||
+          (i === 3 && tab === 'feedback'))
       })
-      document.getElementById('messages').style.display = tab === 'chat' ? 'flex' : 'none'
+      document.getElementById('messages').style.display        = tab === 'chat' ? 'flex' : 'none'
       document.getElementById('chats-content').classList.toggle('active', tab === 'memory')
       document.getElementById('settings-content').classList.toggle('active', tab === 'settings')
+      document.getElementById('feedback-content').classList.toggle('active', tab === 'feedback')
       document.getElementById('footer').style.display = tab === 'chat' ? 'flex' : 'none'
-      if (tab === 'memory') loadChats()
+      if (tab === 'memory')   loadChats()
       if (tab === 'settings') loadSettings()
+      if (tab === 'feedback') loadFeedback()
     }
 
     function formatTime(ts) {
@@ -1375,6 +1408,64 @@
           await window.api.invoke('dismiss-tip', _currentTipKey)
           snackbarClose()
         }
+      })
+    }
+
+    // ─── Feedback ─────────────────────────────────────────────────────────────
+
+    function loadFeedback() {
+      const panel = document.getElementById('feedback-content')
+      panel.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <p style="font-size:13px;font-weight:600;color:var(--text)">Ayudanos a mejorar Iris</p>
+          <p style="font-size:12px;color:var(--text2);line-height:1.5">Contanos qué no funciona, qué te gustaría ver, o cualquier cosa que quieras decirnos.</p>
+        </div>
+        <textarea id="feedback-textarea" placeholder="Escribí tu mensaje acá..." maxlength="1000"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span id="feedback-chars" style="font-size:11px;color:var(--text3)">0 / 1000</span>
+          <button id="feedback-send" class="btn-sm primary" style="min-width:90px">Enviar</button>
+        </div>
+        <div id="feedback-status" style="font-size:12px;min-height:18px;text-align:center"></div>
+      `
+
+      const textarea = document.getElementById('feedback-textarea')
+      const chars    = document.getElementById('feedback-chars')
+      const sendBtn  = document.getElementById('feedback-send')
+      const status   = document.getElementById('feedback-status')
+
+      textarea.addEventListener('input', () => {
+        chars.textContent = `${textarea.value.length} / 1000`
+      })
+
+      sendBtn.addEventListener('click', async () => {
+        const msg = textarea.value.trim()
+        if (!msg) { status.style.color = '#f87171'; status.textContent = 'Escribí algo primero.'; return }
+
+        sendBtn.disabled = true
+        sendBtn.textContent = 'Enviando...'
+        status.textContent = ''
+
+        const gameLabel = document.getElementById('game-label')?.textContent?.replace('Juego: ', '') || null
+        const game = gameLabel === '—' ? null : gameLabel
+
+        try {
+          const res = await window.api.invoke('send-feedback', { message: msg, game })
+          if (res?.ok) {
+            status.style.color = '#4ade80'
+            status.textContent = '¡Gracias! Tu mensaje llegó.'
+            textarea.value = ''
+            chars.textContent = '0 / 1000'
+          } else {
+            status.style.color = '#f87171'
+            status.textContent = 'Error al enviar. Intentá de nuevo.'
+          }
+        } catch (e) {
+          status.style.color = '#f87171'
+          status.textContent = 'Error: ' + e.message
+        }
+
+        sendBtn.disabled = false
+        sendBtn.textContent = 'Enviar'
       })
     }
 
