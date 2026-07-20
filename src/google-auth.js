@@ -7,8 +7,8 @@ const http   = require('http')
 const crypto = require('crypto')
 const { shell } = require('electron')
 
-const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
+const CLIENT_ID     = '444401643532-8s95t3sh92peu7aafv94865bsu17cih4.apps.googleusercontent.com'
+const CLIENT_SECRET = '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'
 
 function b64url(buf) {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')

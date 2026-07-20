@@ -1,5 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage, desktopCapturer } = require('electron')
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, desktopCapturer } = require('electron')
+const { uIOhook, UiohookKey } = require('uiohook-napi')
 const path = require('path')
 const Store = require('electron-store')
 
@@ -11,6 +12,7 @@ let chatWindow = null
 let historyWindow = null
 let loginWindow = null
 let tooltipWindow = null
+let voiceWindow = null
 let cursorInterval = null
 let _lastCursorX = -1, _lastCursorY = -1
 
@@ -22,7 +24,21 @@ if (!gotLock) {
   app.quit()
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Cargar keys desde Supabase antes de cualquier otra cosa
+  try {
+    const { fetchAppKeys, logTelemetry } = require('./supabaseConfig')
+    await fetchAppKeys()
+    const session = store.get('user_session') || null
+    logTelemetry('app_start', session?.id || null, { version: app.getVersion() })
+  } catch (e) {
+    console.error('[CONFIG] Error cargando keys:', e.message)
+    const { dialog } = require('electron')
+    dialog.showErrorBox('Error de conexión', 'Iris no pudo conectarse al servidor.\nVerificá tu conexión a internet e intentá de nuevo.')
+    app.quit()
+    return
+  }
+
   cleanBadMemoryEntries()
 
   // Auto-conceder permiso de micrófono al overlay
@@ -33,11 +49,12 @@ app.whenReady().then(() => {
 
   createTray()
   createOverlay()
+  createVoiceWindow()
   checkLogin()
 
-  globalShortcut.register('Alt+G', () => {
-    toggleChat()
-  })
+  // Atajo de voz con uiohook (funciona con Vanguard y otros anti-cheats)
+  uIOhook.start()
+  registerVoiceShortcut(store.get('voice_shortcut', 'F9'))
 
   if (!isDev) {
     const { autoUpdater } = require('electron-updater')
@@ -51,8 +68,18 @@ app.whenReady().then(() => {
   }
 })
 
+// Re-asercionar always-on-top cada 1.5s por si el juego lo pisa
+setInterval(() => {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+  }
+  if (historyWindow && !historyWindow.isDestroyed()) {
+    historyWindow.setAlwaysOnTop(true, 'screen-saver')
+  }
+}, 1500)
+
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
+  uIOhook.stop()
   if (cursorInterval) { clearInterval(cursorInterval); cursorInterval = null }
 })
 
@@ -168,47 +195,143 @@ function startCursorTracking() {
   }, 33) // ~30 fps
 }
 
-// ─── Chat rápido ─────────────────────────────────────────────────────────────
+// ─── Ventana de voz (oculta, focusable) ──────────────────────────────────────
 
-function createChatWindow(x, y) {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-
-  const chatX = Math.min(x - 320, width - 340)
-  const chatY = Math.max(y - 160, 10)
-
-  chatWindow = new BrowserWindow({
-    width: 360,
-    height: 60,
-    x: chatX,
-    y: chatY,
+function createVoiceWindow() {
+  voiceWindow = new BrowserWindow({
+    width: 1,
+    height: 1,
+    x: 0,
+    y: 0,
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     skipTaskbar: true,
     resizable: false,
+    focusable: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   })
+  voiceWindow.loadFile(path.join(__dirname, '..', 'renderer', 'voice', 'index.html'))
+  voiceWindow.setIgnoreMouseEvents(true)
 
-  chatWindow.loadFile(path.join(__dirname, '..', 'renderer', 'chat', 'index.html'))
-
-  chatWindow.on('closed', () => {
-    chatWindow = null
+  voiceWindow.webContents.once('did-finish-load', () => {
+    voiceWindow.showInactive()
   })
 }
 
-function toggleChat() {
-  if (chatWindow) {
-    chatWindow.close()
-    return
+const MOUSE_BUTTONS = { 'Mouse1': 1, 'Mouse2': 2, 'Mouse3': 3, 'Mouse4': 4, 'Mouse5': 5 }
+
+// Mapa de nombres de teclas → UiohookKey
+const KEY_MAP = {
+  'Space': UiohookKey.Space, 'Enter': UiohookKey.Return,
+  'F1': UiohookKey.F1,   'F2': UiohookKey.F2,   'F3': UiohookKey.F3,
+  'F4': UiohookKey.F4,   'F5': UiohookKey.F5,   'F6': UiohookKey.F6,
+  'F7': UiohookKey.F7,   'F8': UiohookKey.F8,   'F9': UiohookKey.F9,
+  'F10': UiohookKey.F10, 'F11': UiohookKey.F11, 'F12': UiohookKey.F12,
+  'Insert': UiohookKey.Insert, 'Delete': UiohookKey.Delete,
+  'Home': UiohookKey.Home, 'End': UiohookKey.End,
+  'PageUp': UiohookKey.PageUp, 'PageDown': UiohookKey.PageDown,
+  'Pause': UiohookKey.Pause, 'NumLock': UiohookKey.Numlock,
+  'ScrollLock': UiohookKey.ScrollLock, 'CapsLock': UiohookKey.CapsLock,
+}
+
+function parseShortcut(shortcut) {
+  const parts  = shortcut.split('+').map(p => p.trim())
+  const key    = parts[parts.length - 1]
+  const mods   = parts.slice(0, -1).map(p => p.toLowerCase())
+  return {
+    keycode: KEY_MAP[key],
+    ctrl:    mods.includes('ctrl'),
+    alt:     mods.includes('alt'),
+    shift:   mods.includes('shift'),
+  }
+}
+
+// Referencias a los handlers activos para poder removerlos con .off()
+let _voiceHandlers = { kd: null, ku: null, md: null, mu: null }
+
+function registerVoiceShortcut(shortcut) {
+  // Remover solo nuestros handlers anteriores, sin tocar internos de uiohook
+  if (_voiceHandlers.kd) uIOhook.off('keydown',   _voiceHandlers.kd)
+  if (_voiceHandlers.ku) uIOhook.off('keyup',     _voiceHandlers.ku)
+  if (_voiceHandlers.md) uIOhook.off('mousedown', _voiceHandlers.md)
+  if (_voiceHandlers.mu) uIOhook.off('mouseup',   _voiceHandlers.mu)
+  _voiceHandlers = { kd: null, ku: null, md: null, mu: null }
+
+  let pressing = false
+  const mouseBtn = MOUSE_BUTTONS[shortcut]
+
+  if (mouseBtn) {
+    _voiceHandlers.md = (e) => {
+      if (e.button !== mouseBtn || pressing) return
+      pressing = true
+      console.log('[ATAJO] ' + shortcut + ' → start-voice')
+      voiceWindow?.webContents.send('start-voice')
+    }
+    _voiceHandlers.mu = (e) => {
+      if (e.button !== mouseBtn || !pressing) return
+      pressing = false
+      voiceWindow?.webContents.send('stop-voice')
+    }
+    uIOhook.on('mousedown', _voiceHandlers.md)
+    uIOhook.on('mouseup',   _voiceHandlers.mu)
+  } else {
+    const parsed = parseShortcut(shortcut)
+    if (!parsed.keycode) {
+      console.error('[ATAJO] Tecla no reconocida en mapa:', shortcut)
+      return
+    }
+    _voiceHandlers.kd = (e) => {
+      if (e.keycode !== parsed.keycode) return
+      if (parsed.ctrl  && !e.ctrlKey)  return
+      if (parsed.alt   && !e.altKey)   return
+      if (parsed.shift && !e.shiftKey) return
+      if (pressing) return
+      pressing = true
+      console.log('[ATAJO] Disparado → start-voice')
+      voiceWindow?.webContents.send('start-voice')
+    }
+    _voiceHandlers.ku = (e) => {
+      if (e.keycode !== parsed.keycode) return
+      if (!pressing) return
+      pressing = false
+      voiceWindow?.webContents.send('stop-voice')
+    }
+    uIOhook.on('keydown', _voiceHandlers.kd)
+    uIOhook.on('keyup',   _voiceHandlers.ku)
   }
 
-  const overlayBounds = overlayWindow.getBounds()
-  createChatWindow(overlayBounds.x, overlayBounds.y)
+  store.set('voice_shortcut', shortcut)
+  console.log('[ATAJO] Registrado OK (uiohook):', shortcut)
 }
+
+ipcMain.on('voice-state', (_, { state }) => {
+  overlayWindow?.webContents.send('voice-state', { state })
+})
+
+const voiceLogs = []
+ipcMain.on('voice-log', (_, { msg, ts }) => {
+  voiceLogs.push({ msg, ts })
+  if (voiceLogs.length > 50) voiceLogs.shift()
+})
+
+ipcMain.handle('get-voice-logs', () => voiceLogs)
+ipcMain.handle('get-voice-shortcut', () => store.get('voice_shortcut', 'Ctrl+Space'))
+ipcMain.handle('set-voice-shortcut', (_, { shortcut }) => {
+  try {
+    registerVoiceShortcut(shortcut)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+})
+
 
 // ─── Historial ───────────────────────────────────────────────────────────────
 
@@ -296,18 +419,6 @@ ipcMain.on('overlay-moved-drag', (_, { deltaX, deltaY }) => {
   store.set('overlay_position', { x: newX, y: newY })
 })
 
-ipcMain.on('close-chat', () => {
-  chatWindow?.close()
-})
-
-ipcMain.on('resize-chat', (_, { height }) => {
-  if (!chatWindow) return
-  const clamped = Math.min(Math.max(height, 60), 560)
-  const bounds = chatWindow.getBounds()
-  const { height: screenH } = screen.getPrimaryDisplay().workAreaSize
-  const newY = Math.min(bounds.y, screenH - clamped - 10)
-  chatWindow.setBounds({ x: bounds.x, y: newY, width: 360, height: clamped }, false)
-})
 
 ipcMain.on('close-history', () => {
   historyWindow?.close()
@@ -469,11 +580,18 @@ ipcMain.handle('take-screenshot', async () => {
 
 ipcMain.handle('send-message', async (_, { message }) => {
   const { askGemini, detectarNecesidadVisual } = require('./gemini')
-  const { getMemory, saveMemory, getRawMemory } = require('./memory')
+  const { getMemory, saveMemory, getRawMemory, detectGameFromText } = require('./memory')
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
   const chat   = getOrCreateActiveChat(userId)
+
+  // Detección inmediata por alias para que Gemini tenga contexto correcto desde el primer mensaje
+  const _quickGame = detectGameFromText(message)
+  if (_quickGame) {
+    if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
+    else memory[_quickGame].lastPlayed = Date.now()
+  }
 
   const recentHistory = chat.messages.slice(-6)
 
@@ -612,7 +730,7 @@ ipcMain.handle('delete-chat', (_, { chatId }) => {
 ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   const { transcribeAudio }                           = require('./voiceListener')
   const { askGemini, detectarNecesidadVisual }        = require('./gemini')
-  const { getMemory, saveMemory, getRawMemory }       = require('./memory')
+  const { getMemory, saveMemory, getRawMemory, detectGameFromText } = require('./memory')
   const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
 
   const userId = getActiveUserId()
@@ -629,6 +747,13 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     return { error: 'No pude entenderte: ' + e.message }
   }
   if (!message) return { error: 'No detecté ninguna pregunta' }
+
+  // Detección inmediata por alias para que Gemini tenga contexto correcto
+  const _quickGame = detectGameFromText(message)
+  if (_quickGame) {
+    if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
+    else memory[_quickGame].lastPlayed = Date.now()
+  }
 
   // 2. Clasificar y obtener contexto vectorial
   const necesitaVision = await detectarNecesidadVisual(message)
@@ -683,6 +808,9 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 
   return { response, transcription: message, currentGame, visionUsed }
 })
+
+ipcMain.handle('get-tip-dismissed', (_, key) => store.get(`tip_dismissed_${key}`, false))
+ipcMain.handle('dismiss-tip', (_, key) => { store.set(`tip_dismissed_${key}`, true) })
 
 ipcMain.handle('clear-history', () => {
   if (activeChat) { activeChat.messages = [] }

@@ -85,6 +85,11 @@ CONOCIMIENTO DE ALBION ONLINE:
 - Para misiones de matar Keepers: cualquier zona verde/bosque sirve, no necesitás nombres específicos
 - Tipos de Keepers: Druida, Lanzachachas, Guerrero Keeper, Bravos Keeper, Doncella del hacha
 - Los jugadores nuevos arrancan en Thetford, bioma forestal
+
+CONOCIMIENTO TÉCNICO DE IRIS (para responder si el usuario pregunta):
+- Si el atajo de voz no funciona en un juego competitivo: puede ser que el anti-cheat bloquee la tecla. La solución es usar los botones laterales del ratón (Mouse4/Mouse5) — se cambia desde el panel → ⚙ Config.
+- Si el overlay no se ve encima del juego: el juego tiene que estar en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
+- Si pregunta cómo configurar algo: panel de historial → ⚙ Config.
 ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a esta pregunta]:\n${vectorContext}` : ''}`
 
   // Build conversation messages with history for context

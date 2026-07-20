@@ -2,12 +2,12 @@ const { initializeApp } = require('firebase/app')
 const { getAuth, signInWithCredential, GoogleAuthProvider, signOut } = require('firebase/auth')
 
 const firebaseConfig = {
-  apiKey:            process.env.FIREBASE_API_KEY,
-  authDomain:        process.env.FIREBASE_AUTH_DOMAIN,
-  projectId:         process.env.FIREBASE_PROJECT_ID,
-  storageBucket:     process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId:             process.env.FIREBASE_APP_ID
+  apiKey:            'AIzaSyDFWZT-bBR86iPPrlW_gJugjiY4Fdkmm9Y',
+  authDomain:        'iris-overlay-91909.firebaseapp.com',
+  projectId:         'iris-overlay-91909',
+  storageBucket:     'iris-overlay-91909.firebasestorage.app',
+  messagingSenderId: '444401643532',
+  appId:             '1:444401643532:web:c40725d8d376b596667e29'
 }
 
 let _app = null

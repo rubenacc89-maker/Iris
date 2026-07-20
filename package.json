@@ -19,6 +19,7 @@
     "groq-sdk": "^1.3.0",
     "openai": "^6.47.0",
     "screenshot-desktop": "^1.15.0",
+    "uiohook-napi": "^1.5.5",
     "ws": "^8.21.1"
   },
   "devDependencies": {

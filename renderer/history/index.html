@@ -532,6 +532,93 @@
     #footer-send:hover { background: rgba(255,255,255,0.14); }
     #footer-send svg { width: 13px; height: 13px; fill: currentColor; }
 
+    #settings-content {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    #settings-content.active { display: flex; }
+
+    .setting-block {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .setting-block h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #shortcut-display {
+      flex: 1;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 12px;
+      color: #a09fff;
+      font-size: 13px;
+      font-family: monospace;
+      text-align: center;
+    }
+    #shortcut-display.recording {
+      border-color: #34d399;
+      color: #34d399;
+      animation: shortcut-blink 0.8s ease infinite;
+    }
+    @keyframes shortcut-blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    @keyframes snack-in { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+    .btn-sm {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-sm:hover { background: rgba(255,255,255,0.14); }
+    .btn-sm.primary { background: rgba(99,102,241,0.3); border-color: rgba(99,102,241,0.5); }
+    .btn-sm.primary:hover { background: rgba(99,102,241,0.5); }
+
+
+    #footer-mic {
+      background: transparent;
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      color: rgba(255,255,255,0.4);
+    }
+    #footer-mic:hover { color: rgba(255,255,255,0.8); }
+    #footer-mic svg { width: 14px; height: 14px; fill: currentColor; }
+    #footer-mic.recording { color: #ef4444; animation: mic-pulse 1s ease infinite; }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+      50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+    }
+
     .spinner {
       display: inline-block;
       width: 12px;
@@ -573,6 +660,7 @@
     <div id="tabs">
       <div class="tab active" onclick="switchTab('chat')">Conversación</div>
       <div class="tab" onclick="switchTab('memory')">Chats</div>
+      <div class="tab" onclick="switchTab('settings')">⚙ Config</div>
     </div>
 
     <div id="memory-bar">
@@ -590,10 +678,31 @@
     <div id="chats-content">
       <div id="chats-list"></div>
     </div>
+    <div id="settings-content"></div>
+
+    <!-- Snackbar reutilizable -->
+    <div id="snackbar" style="display:none;margin:0 10px 8px;border-radius:8px;background:rgba(15,20,30,0.97);border:1px solid rgba(56,189,248,0.2);box-shadow:0 4px 20px rgba(0,0,0,0.5);padding:12px 14px;animation:snack-in 0.2s ease">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);display:flex;align-items:center;justify-content:center">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div id="snackbar-title" style="font-size:12px;font-weight:600;color:#e2f3ff;margin-bottom:3px"></div>
+          <div id="snackbar-body" style="font-size:11px;color:#94a3b8;line-height:1.5"></div>
+        </div>
+        <button onclick="snackbarClose()" style="flex-shrink:0;background:none;border:none;color:#475569;cursor:pointer;padding:0;font-size:14px;line-height:1;margin-top:-1px">✕</button>
+      </div>
+      <div id="snackbar-cta-row" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid rgba(56,189,248,0.1)">
+        <button id="snackbar-cta" style="background:none;border:none;color:#38bdf8;font-size:11px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px"></button>
+      </div>
+    </div>
 
     <div id="footer">
       <input id="footer-input" type="text" placeholder="Escribe aquí..." maxlength="500" />
-<button id="footer-send">
+      <button id="footer-mic" title="Hablar">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 16.93A7.001 7.001 0 0 1 5 11H3a9 9 0 0 0 8 8.94V22h2v-2.06A9 9 0 0 0 21 11h-2a7 7 0 0 1-6 6.93z"/></svg>
+      </button>
+      <button id="footer-send">
         <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
       </button>
     </div>
@@ -605,12 +714,17 @@
     function switchTab(tab) {
       currentTab = tab
       document.querySelectorAll('.tab').forEach((t, i) => {
-        t.classList.toggle('active', (i === 0 && tab === 'chat') || (i === 1 && tab === 'memory'))
+        t.classList.toggle('active',
+          (i === 0 && tab === 'chat') ||
+          (i === 1 && tab === 'memory') ||
+          (i === 2 && tab === 'settings'))
       })
-      document.getElementById('messages').style.display      = tab === 'chat' ? 'flex' : 'none'
+      document.getElementById('messages').style.display = tab === 'chat' ? 'flex' : 'none'
       document.getElementById('chats-content').classList.toggle('active', tab === 'memory')
-      document.getElementById('footer').style.display        = tab === 'chat' ? 'flex' : 'none'
+      document.getElementById('settings-content').classList.toggle('active', tab === 'settings')
+      document.getElementById('footer').style.display = tab === 'chat' ? 'flex' : 'none'
       if (tab === 'memory') loadChats()
+      if (tab === 'settings') loadSettings()
     }
 
     function formatTime(ts) {
@@ -804,6 +918,7 @@
         group.querySelector('.bubble-a').innerHTML = renderMarkdown(response)
         if (result?.currentGame) {
           document.getElementById('game-label').textContent = `Juego: ${result.currentGame}`
+          await checkGameTip(result.currentGame)
         }
       } catch (e) {
         group.querySelector('.bubble-a').textContent = 'Error al conectar. Intenta de nuevo.'
@@ -847,6 +962,296 @@
     document.getElementById('footer-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') sendFromHistory()
     })
+
+    // ─── BOTÓN MICRÓFONO ─────────────────────────────────────────────────────
+    const micBtn = document.getElementById('footer-mic')
+    let micRecorder  = null
+    let micChunks    = []
+    let micRecording = false
+    let micTimer     = null
+    let micSilence   = null
+
+    micBtn.addEventListener('click', async () => {
+      if (micRecording) { stopMic(); return }
+      await startMic()
+    })
+
+    async function startMic() {
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      } catch (e) {
+        appendMicError('Sin acceso al micrófono: ' + e.message)
+        return
+      }
+
+      micChunks = []; micRecording = true
+      micBtn.classList.add('recording')
+      micBtn.title = 'Click para parar'
+
+      const ctx      = new AudioContext()
+      const src      = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      src.connect(analyser)
+      const data       = new Uint8Array(analyser.frequencyBinCount)
+      let silStart     = null
+      let hasSpoken    = false
+
+      micRecorder = new MediaRecorder(stream)
+      micRecorder.ondataavailable = (e) => { if (e.data.size > 0) micChunks.push(e.data) }
+      micRecorder.onstop = async () => {
+        clearInterval(micSilence); clearTimeout(micTimer)
+        stream.getTracks().forEach(t => t.stop()); ctx.close()
+        micRecording = false; micBtn.classList.remove('recording'); micBtn.title = 'Hablar'
+        await sendMicAudio()
+      }
+      micRecorder.start(250)
+
+      micTimer = setTimeout(() => stopMic(), 30000)
+
+      micSilence = setInterval(() => {
+        analyser.getByteFrequencyData(data)
+        const vol = data.reduce((a, b) => a + b, 0) / data.length
+        if (vol > 10) { hasSpoken = true; silStart = null }
+        else if (hasSpoken) {
+          if (!silStart) silStart = Date.now()
+          else if (Date.now() - silStart > 1500) stopMic()
+        }
+      }, 80)
+    }
+
+    function stopMic() {
+      if (micRecorder?.state === 'recording') micRecorder.stop()
+    }
+
+    async function sendMicAudio() {
+      if (!micChunks.length) return
+      const container = document.getElementById('messages')
+
+      const group = document.createElement('div')
+      group.className = 'msg-group'
+      group.innerHTML = `
+        <div class="msg-time">${formatTime(Date.now())}</div>
+        <div class="bubble-label" style="text-align:right">Tú 🎤</div>
+        <div class="bubble bubble-q" id="mic-q-bubble">...</div>
+        <div class="bubble-label ai">Iris</div>
+        <div class="bubble bubble-a"><span class="spinner"></span>Transcribiendo...</div>
+      `
+      container.appendChild(group)
+      container.scrollTop = container.scrollHeight
+
+      const blob   = new Blob(micChunks, { type: 'audio/webm' })
+      const buffer = await blob.arrayBuffer()
+      const uint8  = new Uint8Array(buffer)
+      let binary   = ''
+      for (let i = 0; i < uint8.length; i += 8192)
+        binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, uint8.length)))
+      const audioBase64 = btoa(binary)
+
+      try {
+        const result = await window.api.invoke('voice-command', { audioBase64 })
+        if (result?.error) {
+          group.querySelector('.bubble-a').textContent = 'Error: ' + result.error
+          group.querySelector('#mic-q-bubble').textContent = '(sin transcripción)'
+        } else {
+          group.querySelector('#mic-q-bubble').textContent = result.transcription || '(sin texto)'
+          group.querySelector('.bubble-a').innerHTML = renderMarkdown(result.response)
+          if (result.currentGame) {
+            document.getElementById('game-label').textContent = `Juego: ${result.currentGame}`
+            checkGameTip(result.currentGame)
+          }
+        }
+      } catch (e) {
+        group.querySelector('.bubble-a').textContent = 'Error: ' + (e?.message || String(e))
+      }
+
+      container.scrollTop = container.scrollHeight
+    }
+
+    function appendMicError(msg) {
+      const container = document.getElementById('messages')
+      const el = document.createElement('div')
+      el.className = 'bubble bubble-a'
+      el.style.color = '#f87171'
+      el.textContent = msg
+      container.appendChild(el)
+      container.scrollTop = container.scrollHeight
+      setTimeout(() => el.remove(), 5000)
+    }
+
+    // ─── CONFIGURACIÓN ────────────────────────────────────────────────────────
+    let recordingShortcut = false
+    let pendingKeys       = []
+
+    async function loadSettings() {
+      const panel = document.getElementById('settings-content')
+      panel.innerHTML = `
+        <div class="setting-block">
+          <h3>Atajo de voz <span style="font-size:10px;font-weight:600;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:4px;padding:2px 6px;letter-spacing:0.04em">BETA</span></h3>
+          <p style="font-size:12px;color:var(--text2)">Combinación de teclas o botón del ratón para activar el micrófono. Evitá usar teclas que ya estén asignadas en tus juegos.</p>
+          <div class="shortcut-row">
+            <div id="shortcut-display">cargando...</div>
+            <button class="btn-sm" id="btn-record-shortcut">Cambiar</button>
+            <button class="btn-sm primary" id="btn-save-shortcut" style="display:none">Guardar</button>
+            <button class="btn-sm" id="btn-cancel-shortcut" style="display:none">Cancelar</button>
+          </div>
+          <p id="shortcut-status" style="font-size:11px;color:#888"></p>
+        </div>
+
+      `
+
+      const current = await window.api.invoke('get-voice-shortcut')
+      document.getElementById('shortcut-display').textContent = current
+
+      document.getElementById('btn-record-shortcut').addEventListener('click', startRecordShortcut)
+      document.getElementById('btn-save-shortcut').addEventListener('click', saveShortcut)
+      document.getElementById('btn-cancel-shortcut').addEventListener('click', cancelRecordShortcut)
+
+      refreshLogs()
+    }
+
+
+    function startRecordShortcut() {
+      recordingShortcut = true
+      pendingKeys = []
+      const disp = document.getElementById('shortcut-display')
+      disp.textContent = 'Presioná una tecla o botón del ratón...'
+      disp.classList.add('recording')
+      document.getElementById('btn-record-shortcut').style.display = 'none'
+      document.getElementById('btn-save-shortcut').style.display = ''
+      document.getElementById('btn-cancel-shortcut').style.display = ''
+      document.addEventListener('keydown', captureShortcut)
+      document.addEventListener('mousedown', captureMouseShortcut)
+    }
+
+    function captureShortcut(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      const parts = []
+      if (e.ctrlKey)  parts.push('Ctrl')
+      if (e.altKey)   parts.push('Alt')
+      if (e.shiftKey) parts.push('Shift')
+      const key = e.key
+      if (!['Control','Alt','Shift','Meta'].includes(key)) {
+        parts.push(key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key)
+      }
+      pendingKeys = parts
+      if (parts.length > 0) {
+        document.getElementById('shortcut-display').textContent = parts.join('+')
+      }
+    }
+
+    function captureMouseShortcut(e) {
+      // Solo capturar botones laterales (4 y 5) — no left/right/middle
+      if (e.button < 3) return
+      e.preventDefault()
+      e.stopPropagation()
+      const btn = 'Mouse' + (e.button + 1)
+      pendingKeys = [btn]
+      const labels = { Mouse4: 'Botón lateral atrás (Mouse4)', Mouse5: 'Botón lateral adelante (Mouse5)' }
+      document.getElementById('shortcut-display').textContent = labels[btn] || btn
+    }
+
+    async function saveShortcut() {
+      const onlyModifiers = pendingKeys.every(k => ['Ctrl','Alt','Shift'].includes(k))
+      if (pendingKeys.length === 0 || onlyModifiers) {
+        document.getElementById('shortcut-status').textContent = 'Presioná al menos una tecla o botón del ratón.'
+        return
+      }
+      document.removeEventListener('keydown', captureShortcut)
+      document.removeEventListener('mousedown', captureMouseShortcut)
+      recordingShortcut = false
+      const shortcut = pendingKeys.join('+')
+      const res = await window.api.invoke('set-voice-shortcut', { shortcut })
+      const disp = document.getElementById('shortcut-display')
+      disp.classList.remove('recording')
+      document.getElementById('btn-record-shortcut').style.display = ''
+      document.getElementById('btn-save-shortcut').style.display = 'none'
+      document.getElementById('btn-cancel-shortcut').style.display = 'none'
+      if (res?.ok) {
+        disp.textContent = shortcut
+        document.getElementById('shortcut-status').textContent = '✓ Guardado'
+        setTimeout(() => { const s = document.getElementById('shortcut-status'); if(s) s.textContent = '' }, 3000)
+      } else {
+        document.getElementById('shortcut-status').textContent = 'Error: ' + (res?.error || 'no se pudo registrar')
+      }
+    }
+
+    function cancelRecordShortcut() {
+      document.removeEventListener('keydown', captureShortcut)
+      document.removeEventListener('mousedown', captureMouseShortcut)
+      recordingShortcut = false
+      document.getElementById('shortcut-display').classList.remove('recording')
+      document.getElementById('btn-record-shortcut').style.display = ''
+      document.getElementById('btn-save-shortcut').style.display = 'none'
+      document.getElementById('btn-cancel-shortcut').style.display = 'none'
+      loadSettings()
+    }
+
+    const BORDERLESS_TIPS = {
+      'league of legends': 'Para usar Iris con League of Legends, poné el juego en modo Sin bordes: ESC → Configuración → Video → Modo de pantalla → Sin bordes.',
+      'valorant':          'Para usar Iris con Valorant, poné el juego en modo Sin bordes: Configuración → Video → Modo de pantalla → Sin bordes.',
+      'cs2':               'Para usar Iris con CS2, activá Ventana sin bordes en Ajustes → Video → Modo de visualización.',
+      'counter-strike':    'Para usar Iris con Counter-Strike, activá Ventana sin bordes en Ajustes → Video → Modo de visualización.',
+      'fortnite':          'Para usar Iris con Fortnite, activá Ventana sin borde en Configuración → Video → Modo de ventana.',
+      'apex legends':      'Para usar Iris con Apex, poné el juego en Sin bordes: Ajustes → Video → Modo de visualización.',
+      'overwatch':         'Para usar Iris con Overwatch, activá Ventana sin bordes en Opciones → Video.',
+      'warzone':           'Para usar Iris con Warzone, activá Ventana sin bordes en Opciones → Gráficos → Modo de pantalla.',
+      'rainbow six':       'Para usar Iris con Rainbow Six, activá Sin bordes en Ajustes → Pantalla → Modo de pantalla.',
+    }
+
+    // ─── Snackbar reutilizable ────────────────────────────────────────────────
+    let _snackbarOnCta = null
+
+    function showSnackbar({ title, body, ctaLabel, onCta } = {}) {
+      document.getElementById('snackbar-title').textContent = title || ''
+      document.getElementById('snackbar-body').textContent  = body  || ''
+      const ctaRow = document.getElementById('snackbar-cta-row')
+      const ctaBtn = document.getElementById('snackbar-cta')
+      if (ctaLabel && onCta) {
+        ctaBtn.textContent = ctaLabel
+        _snackbarOnCta = onCta
+        ctaRow.style.display = 'block'
+      } else {
+        ctaRow.style.display = 'none'
+        _snackbarOnCta = null
+      }
+      const el = document.getElementById('snackbar')
+      el.style.display = 'block'
+      el.style.animation = 'none'
+      requestAnimationFrame(() => { el.style.animation = 'snack-in 0.2s ease' })
+    }
+
+    function snackbarClose() {
+      document.getElementById('snackbar').style.display = 'none'
+      _snackbarOnCta = null
+    }
+
+    document.getElementById('snackbar-cta').addEventListener('click', () => {
+      if (_snackbarOnCta) _snackbarOnCta()
+    })
+
+    // ─── Tip de juego ─────────────────────────────────────────────────────────
+    let _currentTipKey = null
+
+    async function checkGameTip(gameName) {
+      const gameLow = (gameName || '').toLowerCase()
+      const tipKey  = Object.keys(BORDERLESS_TIPS).find(k => gameLow.includes(k))
+      if (!tipKey) return
+      _currentTipKey = tipKey
+      const dismissed = await window.api.invoke('get-tip-dismissed', tipKey)
+      if (dismissed) return
+      showSnackbar({
+        title:    'Configuración recomendada',
+        body:     BORDERLESS_TIPS[tipKey],
+        ctaLabel: 'No avisarme más',
+        onCta:    async () => {
+          await window.api.invoke('dismiss-tip', _currentTipKey)
+          snackbarClose()
+        }
+      })
+    }
 
     window.addEventListener('load', () => {
       loadHeaderProfile()

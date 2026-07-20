@@ -3,6 +3,12 @@ const path = require('path')
 const os   = require('os')
 const Groq = require('groq-sdk')
 
+// Groq SDK requiere File global (disponible en Node 20+, no en versiones anteriores)
+if (!globalThis.File) {
+  const { File } = require('buffer')
+  globalThis.File = File
+}
+
 const GROQ_KEY = process.env.GROQ_API_KEY || ''
 let groq = null
 

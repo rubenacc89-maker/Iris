@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+<script>
+  let voiceState    = 'idle'
+  let mediaRecorder = null
+  let audioChunks   = []
+  let recordTimer   = null
+  let recognition   = null
+
+  function log(msg) {
+    console.log(msg)
+    window.api.send('voice-log', { msg, ts: Date.now() })
+  }
+
+  function setState(state) {
+    voiceState = state
+    window.api.send('voice-state', { state })
+  }
+
+  // Crea SIEMPRE una instancia nueva para evitar estado corrupto
+  function createRecognition() {
+    const SR = window.webkitSpeechRecognition || window.SpeechRecognition
+    if (!SR) return null
+    const r = new SR()
+    r.continuous      = true
+    r.interimResults  = true
+    r.lang            = 'es-ES'
+    r.onresult = (e) => {
+      if (voiceState !== 'idle') return
+      const t = e.results[e.results.length - 1][0].transcript.toLowerCase()
+      if (t.includes('iris')) {
+        log('[VOZ] Wake word detectado')
+        startListening()
+      }
+    }
+    r.onerror = (e) => {
+      log(`[VOZ] Recognition error: ${e.error}`)
+      if (e.error === 'not-allowed') return
+      scheduleRestart()
+    }
+    r.onend = () => {
+      if (voiceState === 'idle') scheduleRestart()
+    }
+    return r
+  }
+
+  function scheduleRestart() {
+    setTimeout(() => {
+      if (voiceState !== 'idle') return
+      try { recognition?.abort() } catch (_) {}
+      recognition = createRecognition()
+      if (!recognition) return
+      try { recognition.start() } catch (e) { log('[VOZ] start error: ' + e.message) }
+    }, 600)
+  }
+
+  function initWakeWord() {
+    recognition = createRecognition()
+    if (!recognition) { log('[VOZ] Web Speech API no disponible'); return }
+    try {
+      recognition.start()
+      log('[VOZ] Escucha wake word activa')
+    } catch (e) {
+      log('[VOZ] Error al iniciar: ' + e.message)
+    }
+  }
+
+  async function startListening() {
+    if (voiceState !== 'idle') return
+    try { recognition?.abort() } catch (_) {}
+    setState('listening')
+
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      log('[VOZ] Micrófono OK — stream activo')
+    } catch (e) {
+      log('[VOZ] ERROR micrófono: ' + e.name + ' — ' + e.message)
+      setState('idle')
+      scheduleRestart()
+      return
+    }
+
+    audioChunks = []
+
+    const audioCtx  = new AudioContext()
+    const source    = audioCtx.createMediaStreamSource(stream)
+    const analyser  = audioCtx.createAnalyser()
+    analyser.fftSize = 256
+    source.connect(analyser)
+    const dataArr    = new Uint8Array(analyser.frequencyBinCount)
+    let silenceStart = null
+    let hasSpoken    = false
+
+    mediaRecorder = new MediaRecorder(stream)
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
+    mediaRecorder.onstop = async () => {
+      clearInterval(silenceCheck)
+      clearTimeout(recordTimer)
+      stream.getTracks().forEach(t => t.stop())
+      audioCtx.close()
+      await processVoiceCommand()
+    }
+    mediaRecorder.start(250)
+
+    recordTimer = setTimeout(() => {
+      if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+    }, 30000)
+
+    const silenceCheck = setInterval(() => {
+      analyser.getByteFrequencyData(dataArr)
+      const vol = dataArr.reduce((a, b) => a + b, 0) / dataArr.length
+      if (vol > 10) { hasSpoken = true; silenceStart = null }
+      else if (hasSpoken) {
+        if (!silenceStart) silenceStart = Date.now()
+        else if (Date.now() - silenceStart > 1500) {
+          if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+        }
+      }
+    }, 80)
+  }
+
+  async function processVoiceCommand() {
+    setState('processing')
+
+    const blob   = new Blob(audioChunks, { type: 'audio/webm' })
+    const buffer = await blob.arrayBuffer()
+    const uint8  = new Uint8Array(buffer)
+    let binary   = ''
+    for (let i = 0; i < uint8.length; i += 8192)
+      binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, uint8.length)))
+    const audioBase64 = btoa(binary)
+
+    try {
+      const result = await window.api.invoke('voice-command', { audioBase64 })
+      if (result?.error) {
+        log('[VOZ] Error IA: ' + result.error)
+      } else {
+        log('[VOZ] OK — transcripción: ' + result.transcription)
+        speak(result.response)
+      }
+    } catch (e) {
+      log('[VOZ] Error IPC: ' + e.message)
+    }
+
+    setState('idle')
+    scheduleRestart()
+  }
+
+  // ── Selección de voz ──────────────────────────────────────────────────────
+  let selectedVoice = null
+
+  function loadVoice() {
+    const voices = speechSynthesis.getVoices()
+    if (!voices.length) return
+
+    const priority = [
+      v => /sabina/i.test(v.name),
+      v => /natural/i.test(v.name) && v.lang.startsWith('es'),
+      v => /(paula|helena|mónica|monica|elena|lucía|lucia)/i.test(v.name),
+      v => v.lang.startsWith('es-ES'),
+      v => v.lang.startsWith('es-MX'),
+      v => v.lang.startsWith('es'),
+    ]
+
+    for (const test of priority) {
+      const match = voices.find(test)
+      if (match) { selectedVoice = match; log('[VOZ] Voz: ' + match.name); break }
+    }
+  }
+
+  speechSynthesis.onvoiceschanged = loadVoice
+  loadVoice()
+
+  function stripMarkdown(text) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/_(.*?)_/g, '$1')
+      .replace(/`{1,3}[\s\S]*?`{1,3}/g, '')
+      .replace(/#{1,6}\s+/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/^\s*\d+\.\s+/gm, '')
+      .replace(/\n{2,}/g, '. ')
+      .replace(/\n/g, ' ')
+      .trim()
+  }
+
+  function speak(text) {
+    if (!text || !('speechSynthesis' in window)) return
+    speechSynthesis.cancel()
+    const clean = stripMarkdown(text)
+    const u   = new SpeechSynthesisUtterance(clean.slice(0, 500))
+    u.lang    = 'es-ES'
+    u.rate    = 1.35
+    u.pitch   = 1.0
+    if (selectedVoice) u.voice = selectedVoice
+    speechSynthesis.speak(u)
+  }
+
+  // Tap → inicia, silence detection para automáticamente
+  window.api.on('start-voice', () => {
+    log('[VOZ] start-voice recibido, estado: ' + voiceState)
+    if (voiceState === 'idle') startListening()
+  })
+
+  // Hold → para cuando sueltan la tecla
+  window.api.on('stop-voice', () => {
+    if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+  })
+
+  setTimeout(initWakeWord, 1500)
+</script>
+</body>
+</html>

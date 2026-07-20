@@ -106,6 +106,28 @@
 
     #send-btn svg { width: 14px; height: 14px; fill: white; }
 
+    #mic-btn {
+      background: transparent;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    #mic-btn svg { width: 15px; height: 15px; fill: rgba(255,255,255,0.45); transition: fill 0.15s; }
+    #mic-btn:hover svg { fill: rgba(255,255,255,0.8); }
+    #mic-btn.recording { background: rgba(239,68,68,0.2); animation: mic-pulse 1s ease infinite; }
+    #mic-btn.recording svg { fill: #ef4444; }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+      50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+    }
+
     .spinner {
       display: inline-block;
       width: 13px;
@@ -133,6 +155,9 @@
   <div id="container">
     <div id="input-area">
       <input id="input" type="text" placeholder="Pregúntame algo del juego..." autofocus maxlength="500" />
+      <button id="mic-btn" title="Hablar">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 16.93A7.001 7.001 0 0 1 5 11H3a9 9 0 0 0 8 8.94V22h2v-2.06A9 9 0 0 0 21 11h-2a7 7 0 0 1-6 6.93z"/></svg>
+      </button>
       <button id="send-btn">
         <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
       </button>
@@ -244,6 +269,131 @@
     })
 
     window.addEventListener('load', () => { resize(); input.focus() })
+
+    // ─── BOTÓN MICRÓFONO ─────────────────────────────────────────────────────
+    const micBtn = document.getElementById('mic-btn')
+    let micRecorder  = null
+    let micChunks    = []
+    let micRecording = false
+    let micTimer     = null
+    let silenceCheckInterval = null
+
+    micBtn.addEventListener('click', async () => {
+      if (micRecording) {
+        stopMic()
+      } else {
+        await startMic()
+      }
+    })
+
+    async function startMic() {
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      } catch (e) {
+        showMicError('Sin acceso al micrófono: ' + e.message)
+        return
+      }
+
+      micChunks    = []
+      micRecording = true
+      micBtn.classList.add('recording')
+      micBtn.title = 'Click para parar'
+
+      const audioCtx  = new AudioContext()
+      const source    = audioCtx.createMediaStreamSource(stream)
+      const analyser  = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      const dataArr    = new Uint8Array(analyser.frequencyBinCount)
+      let silenceStart = null
+      let hasSpoken    = false
+
+      micRecorder = new MediaRecorder(stream)
+      micRecorder.ondataavailable = (e) => { if (e.data.size > 0) micChunks.push(e.data) }
+      micRecorder.onstop = async () => {
+        clearInterval(silenceCheckInterval)
+        clearTimeout(micTimer)
+        stream.getTracks().forEach(t => t.stop())
+        audioCtx.close()
+        micRecording = false
+        micBtn.classList.remove('recording')
+        micBtn.title = 'Hablar'
+        await sendMicAudio()
+      }
+      micRecorder.start(250)
+
+      // Parar auto a los 10s
+      micTimer = setTimeout(() => stopMic(), 10000)
+
+      // Silencio de 1.5s para parar
+      silenceCheckInterval = setInterval(() => {
+        analyser.getByteFrequencyData(dataArr)
+        const vol = dataArr.reduce((a, b) => a + b, 0) / dataArr.length
+        if (vol > 10) { hasSpoken = true; silenceStart = null }
+        else if (hasSpoken) {
+          if (!silenceStart) silenceStart = Date.now()
+          else if (Date.now() - silenceStart > 1500) stopMic()
+        }
+      }, 80)
+    }
+
+    function stopMic() {
+      if (micRecorder?.state === 'recording') micRecorder.stop()
+    }
+
+    async function sendMicAudio() {
+      if (micChunks.length === 0) return
+
+      // Spinner en burbuja IA
+      if (aiBubble) aiBubble.remove()
+      aiBubble = document.createElement('div')
+      aiBubble.className = 'bubble-ai'
+      aiBubble.innerHTML = '<span class="spinner"></span>Transcribiendo...'
+      container.insertBefore(aiBubble, inputArea)
+      resize()
+
+      const blob   = new Blob(micChunks, { type: 'audio/webm' })
+      const buffer = await blob.arrayBuffer()
+      const uint8  = new Uint8Array(buffer)
+      let binary   = ''
+      for (let i = 0; i < uint8.length; i += 8192) {
+        binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, uint8.length)))
+      }
+      const audioBase64 = btoa(binary)
+
+      try {
+        const result = await window.api.invoke('voice-command', { audioBase64 })
+        if (result?.error) {
+          aiBubble.textContent = 'Error: ' + result.error
+        } else {
+          // Muestra lo que entendió como burbuja de usuario
+          if (result.transcription) {
+            const uBubble = document.createElement('div')
+            uBubble.className = 'bubble-user'
+            uBubble.textContent = '🎤 ' + result.transcription
+            container.insertBefore(uBubble, aiBubble)
+            setTimeout(() => { uBubble.classList.add('fading'); setTimeout(() => uBubble.remove(), 1000) }, 3000)
+          }
+          aiBubble.innerHTML = escapeHtml(result.response) + '<span class="action" onclick="openHistory()">Ver historial →</span>'
+        }
+      } catch (e) {
+        aiBubble.textContent = 'Error: ' + (e?.message || String(e))
+      }
+
+      resize()
+      startFadeTimer()
+    }
+
+    function showMicError(msg) {
+      const b = document.createElement('div')
+      b.className = 'bubble-ai'
+      b.style.color = '#f87171'
+      b.textContent = msg
+      container.insertBefore(b, inputArea)
+      resize()
+      setTimeout(() => { b.remove(); resize() }, 4000)
+    }
 
     window.api.on('vector-memory-full', ({ juego }) => {
       const notice = document.createElement('div')
