@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -116,9 +117,12 @@
     }
 
     window.api.on('show-tooltip', (data) => {
-      const name = data && data.firstName ? data.firstName : null
-      fullText = name ? `¡Hola ${name}! ¿Qué hacemos hoy?` : '¡Hola! ¿Qué hacemos hoy?'
-      // Empezar a escribir 100ms después del fade-in
+      if (data && data.message) {
+        fullText = data.message
+      } else {
+        const name = data && data.firstName ? data.firstName : null
+        fullText = name ? `¡Hola ${name}! ¿Qué hacemos hoy?` : '¡Hola! ¿Qué hacemos hoy?'
+      }
       setTimeout(startTypewriter, 100)
     })
 

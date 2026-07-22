@@ -1,23 +1,28 @@
 const Store = require('electron-store')
-const { GoogleGenAI } = require('@google/genai')
 
-const store    = new Store()
-const MAX_VEC  = 200
-const GEM_KEY  = process.env.GEMINI_API_KEY || ''
+const store   = new Store()
+const MAX_VEC = 200
 
-let genai = null
-function getGenAI() {
-  if (!genai) genai = new GoogleGenAI({ apiKey: GEM_KEY })
-  return genai
-}
+const EDGE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '') + '/functions/v1/ai-chat'
+const EDGE_KEY = process.env.SUPABASE_ANON_KEY || ''
 
 async function generarVector(texto, taskType = 'RETRIEVAL_DOCUMENT') {
-  const res = await getGenAI().models.embedContent({
-    model: 'text-embedding-004',
-    content: texto,
-    taskType
+  const res = await fetch(EDGE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${EDGE_KEY}`,
+      'apikey': EDGE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ type: 'embed', text: texto, taskType }),
   })
-  return res.embedding.values
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(`Embed HTTP ${res.status}: ${JSON.stringify(errData.error || errData)}`)
+  }
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data.values
 }
 
 function cosineSim(a, b) {
@@ -30,10 +35,8 @@ function cosineSim(a, b) {
   return (na === 0 || nb === 0) ? 0 : dot / (Math.sqrt(na) * Math.sqrt(nb))
 }
 
-// Guarda un recuerdo vectorial para un juego/userId.
-// Retorna { ok: true } | { ok: false, full: true, juego } | { ok: false, error }
 async function guardarRecuerdoVectorial(userId, juegoActivo, texto) {
-  if (!GEM_KEY) return { ok: false, error: 'Sin API key de Gemini' }
+  if (!EDGE_KEY) return { ok: false, error: 'Sin configuración de Supabase' }
 
   const key   = `vector_memory_${userId}`
   const mem   = store.get(key, {})
@@ -58,10 +61,8 @@ async function guardarRecuerdoVectorial(userId, juegoActivo, texto) {
   }
 }
 
-// Busca el recuerdo más relevante para la pregunta del usuario.
-// Retorna el texto del recuerdo más similar, o null si no hay nada útil.
 async function buscarRecuerdoVectorial(userId, juegoActivo, pregunta) {
-  if (!GEM_KEY) return null
+  if (!EDGE_KEY) return null
 
   const key      = `vector_memory_${userId}`
   const mem      = store.get(key, {})
@@ -96,7 +97,6 @@ async function buscarRecuerdoVectorial(userId, juegoActivo, pregunta) {
   }
 }
 
-// Devuelve cuántos recuerdos tiene un juego y el límite.
 function contarRecuerdos(userId, juegoActivo) {
   const key   = `vector_memory_${userId}`
   const mem   = store.get(key, {})

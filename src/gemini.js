@@ -1,27 +1,27 @@
-const Groq = require('groq-sdk')
-const { GoogleGenAI } = require('@google/genai')
 const { searchWeb } = require('./search')
 
-const GROQ_KEY   = process.env.GROQ_API_KEY || ''
-const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+const EDGE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '') + '/functions/v1/ai-chat'
+const EDGE_KEY = process.env.SUPABASE_ANON_KEY || ''
 
-let groq   = null
-let gemini = null
-
-function getGroq() {
-  if (!groq) groq = new Groq({ apiKey: GROQ_KEY })
-  return groq
-}
-
-function getGemini() {
-  if (!gemini) gemini = new GoogleGenAI({ apiKey: GEMINI_KEY })
-  return gemini
+async function edgeFetch(body) {
+  const res = await fetch(EDGE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${EDGE_KEY}`,
+      'apikey': EDGE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data
 }
 
 async function detectarNecesidadVisual(pregunta) {
   try {
-    const completion = await getGroq().chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+    const data = await edgeFetch({
+      type: 'classify',
       messages: [
         {
           role: 'system',
@@ -29,20 +29,18 @@ async function detectarNecesidadVisual(pregunta) {
         },
         { role: 'user', content: pregunta }
       ],
-      max_tokens: 5,
-      temperature: 0
     })
-    const resultado = completion.choices[0].message.content.trim().toUpperCase()
+    const resultado = (data.result || '').trim().toUpperCase()
     console.log(`[CLASIFICADOR] "${pregunta.slice(0, 60)}" → ${resultado}`)
     return resultado.includes('SI')
   } catch (err) {
-    console.log('[CLASIFICADOR] Error en clasificador, asumiendo NO visión:', err.message)
+    console.log('[CLASIFICADOR] Error, asumiendo NO visión:', err.message)
     return false
   }
 }
 
 async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null) {
-  if (!GROQ_KEY && !GEMINI_KEY) return { text: 'Error: no hay API keys configuradas en .env', vision: false }
+  if (!EDGE_KEY) return { text: 'Error: no hay configuración de Supabase en .env', vision: false }
 
   const memoryContext = buildMemoryContext(memory)
   const gameEntries = Object.entries(memory || {}).filter(([n]) => n && n.toLowerCase() !== 'null').sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
@@ -57,7 +55,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
     }
   } catch (_) {}
 
-  const systemPrompt = `${game ? `JUEGO ACTIVO: ${game}\nRespondé SIEMPRE sobre ${game}. No uses información ni ítems de otros juegos aunque los tengas en memoria.\n\n` : ''}Sos un amigo gamer que sabe mucho de videojuegos. Hablás de forma natural y directa, como en una conversación entre amigos jugando.
+  const systemPrompt = `${game ? `JUEGO ACTIVO: ${game}\nSi la pregunta es sobre videojuegos, respondé sobre ${game}. Si la pregunta es sobre otra cosa, ayudá igual como lo haría cualquier asistente inteligente.\n\n` : ''}Sos un asistente inteligente con personalidad de amigo gamer. Ayudás con videojuegos, pero también con cualquier otra consulta: trabajo, estudio, tecnología, lo que sea. Hablás de forma natural y directa, como en una conversación entre amigos.
 
 TONO Y ESTILO — MUY IMPORTANTE:
 - JAMÁS uses frases formales como "Basándome en...", "Según la evidencia...", "Conclusión:", "Posibles juegos:", "Análisis del juego". Eso es robótico y aburrido.
@@ -85,7 +83,6 @@ CONOCIMIENTO TÉCNICO DE IRIS (para responder si el usuario pregunta):
 - Si pregunta cómo configurar algo: panel de historial → ⚙ Config.
 ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a esta pregunta — solo usarlo si es de ${game || 'este juego'}]:\n${vectorContext}` : ''}`
 
-  // Build conversation messages with history for context
   const messages = [{ role: 'system', content: systemPrompt }]
 
   if (recentHistory && recentHistory.length > 0) {
@@ -97,46 +94,32 @@ ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a
 
   const userText = message + searchContext
 
-  if (screenshotBase64 && GEMINI_KEY) {
+  // Visión con Gemini
+  if (screenshotBase64) {
     try {
-      const contents = [
-        { inlineData: { data: screenshotBase64, mimeType: 'image/jpeg' } },
-        systemPrompt + '\n\n' + userText
-      ]
-      const r = await getGemini().models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents,
-        config: { temperature: 0.5 }
-      })
-      return { text: r.text.trim(), vision: true }
+      const data = await edgeFetch({ type: 'vision', systemPrompt, userText, screenshotBase64 })
+      return { text: data.text, vision: true }
     } catch (err) {
-      const msg = err.message || String(err)
-      return { text: 'Error Gemini: ' + msg.substring(0, 200), vision: false }
+      console.log('[IRIS] Error Gemini via proxy:', err.message || String(err))
+      return { text: 'No pude analizar la pantalla en este momento. Intentá sin visión.', vision: false }
     }
   }
 
+  // Texto con Groq
   messages.push({ role: 'user', content: userText })
 
-  const GROQ_MODELS = [
-    'llama-3.1-8b-instant',
-    'llama-3.2-1b-preview',
-    'gemma2-9b-it',
-  ]
-
-  for (const model of GROQ_MODELS) {
-    try {
-      const completion = await getGroq().chat.completions.create({ model, messages, max_tokens: 500 })
-      if (model !== GROQ_MODELS[0]) console.log(`[IRIS] Usando modelo fallback: ${model}`)
-      return { text: completion.choices[0].message.content.trim(), vision: false }
-    } catch (err) {
-      const msg = err.message || String(err)
-      if (msg.includes('401')) return { text: 'Error: API Key de Groq inválida.', vision: false }
-      if (msg.includes('429')) { console.log(`[IRIS] 429 en ${model}, probando siguiente...`); continue }
-      return { text: 'Error: ' + msg.substring(0, 120), vision: false }
+  try {
+    const data = await edgeFetch({ type: 'chat', messages, max_tokens: 500 })
+    return { text: data.text, vision: false }
+  } catch (err) {
+    const msg = err.message || String(err)
+    console.log('[IRIS] Error Groq via proxy:', msg)
+    // Mensaje amigable para el usuario
+    if (msg.includes('429') || msg.includes('ocupados')) {
+      return { text: 'Iris está muy ocupada ahora mismo, esperá unos segundos e intentá de nuevo.', vision: false }
     }
+    return { text: 'No se pudo conectar con Iris en este momento. Verificá tu conexión a internet.', vision: false }
   }
-
-  return { text: 'Todos los modelos están ocupados en este momento, intentá en unos segundos.', vision: false }
 }
 
 function buildMemoryContext(memory) {

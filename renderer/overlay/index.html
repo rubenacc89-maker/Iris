@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -159,12 +160,15 @@
     let dragStart  = null
     let hasMoved   = false
 
+    window.addEventListener('contextmenu', (e) => e.preventDefault())
+
     btn.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return
+      e.preventDefault()
+      if (e.button === 1) return
+      if (e.button === 2) return
       isDragging = true
       hasMoved   = false
       dragStart  = { x: e.screenX, y: e.screenY }
-      e.preventDefault()
     })
 
     window.addEventListener('mousemove', (e) => {
@@ -179,17 +183,16 @@
     })
 
     window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) {
+        window.api.send('overlay-click-right')
+        return
+      }
       if (!isDragging) return
       const wasClick = !hasMoved
       isDragging = false
       hasMoved   = false
       dragStart  = null
       if (wasClick && e.button === 0) window.api.send('overlay-click-left')
-    })
-
-    btn.addEventListener('contextmenu', (e) => {
-      e.preventDefault()
-      if (!hasMoved) window.api.send('overlay-click-right')
     })
 
     // ─── ESTADOS DE VOZ ───────────────────────────────────────────────────────

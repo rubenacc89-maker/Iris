@@ -1,7 +1,8 @@
 {
   "name": "iris-overlay",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Universal AI overlay assistant for gamers. Real-time screen analysis, intelligent visual classifier and persistent memory.",
+  "author": "Cáceres",
   "main": "src/main.js",
   "scripts": {
     "start": "set ELECTRON_RUN_AS_NODE= && electron .",
@@ -29,6 +30,7 @@
   "build": {
     "appId": "com.gamingai.overlay",
     "productName": "Iris",
+    "npmRebuild": false,
     "win": {
       "target": "nsis",
       "icon": "assets/icons/icon.ico"

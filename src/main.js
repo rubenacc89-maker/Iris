@@ -6,12 +6,35 @@ const Store = require('electron-store')
 
 const store = new Store()
 
+// Detecta si el usuario está pidiendo explícitamente guardar un recuerdo
+function esComandoDeMemoria(texto) {
+  return /recuerda\s+que|recuerda\s+esto|guarda\s+que|anotá\s+que|anota\s+que|acordate\s+que|no\s+olvides\s+que|tené\s+en\s+cuenta\s+que|remember\s+that|remember\s+this/i.test(texto)
+}
+
+const sessionStartTime = Date.now()
+let _sessionMsgCount = 0
+const recentErrors = []
+function _recordError(context, err) {
+  recentErrors.push({ ts: new Date().toISOString(), ctx: context, msg: (err?.message || String(err)).substring(0, 200) })
+  if (recentErrors.length > 10) recentErrors.shift()
+}
+
+process.on('uncaughtException', (err) => {
+  _recordError('uncaughtException', err)
+  console.error('[IRIS] Uncaught exception:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  _recordError('unhandledRejection', reason)
+  console.error('[IRIS] Unhandled rejection:', reason)
+})
+
 let tray = null
 let overlayWindow = null
 let chatWindow = null
 let historyWindow = null
 let loginWindow = null
 let tooltipWindow = null
+let contextMenuWindow = null
 let voiceWindow = null
 let cursorInterval = null
 let _lastCursorX = -1, _lastCursorY = -1
@@ -81,6 +104,13 @@ setInterval(() => {
 app.on('will-quit', () => {
   uIOhook.stop()
   if (cursorInterval) { clearInterval(cursorInterval); cursorInterval = null }
+  try {
+    const { logTelemetry } = require('./supabaseConfig')
+    logTelemetry('session_end', getActiveUserId(), {
+      duration_s: Math.round((Date.now() - sessionStartTime) / 1000),
+      messages: _sessionMsgCount
+    })
+  } catch (_) {}
 })
 
 // ─── Tray ────────────────────────────────────────────────────────────────────
@@ -326,6 +356,13 @@ ipcMain.handle('get-voice-shortcut', () => store.get('voice_shortcut', 'Ctrl+Spa
 ipcMain.handle('set-voice-shortcut', (_, { shortcut }) => {
   try {
     registerVoiceShortcut(shortcut)
+    try {
+      const { logTelemetry } = require('./supabaseConfig')
+      logTelemetry('shortcut_changed', getActiveUserId(), {
+        shortcut,
+        type: MOUSE_BUTTONS[shortcut] ? 'mouse' : 'keyboard'
+      })
+    } catch (_) {}
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e.message }
@@ -385,6 +422,11 @@ function openHistory() {
 // ─── IPC handlers ────────────────────────────────────────────────────────────
 
 ipcMain.on('overlay-click-left', () => {
+  const session = store.get('user_session') || tempSession
+  if (!session) {
+    showLoginRequiredTooltip()
+    return
+  }
   tooltipWindow?.close()
   if (historyWindow) {
     historyWindow.close()
@@ -395,15 +437,54 @@ ipcMain.on('overlay-click-left', () => {
 
 ipcMain.on('tooltip-click', () => {
   tooltipWindow?.close()
-  openHistory()
+  if (_tooltipMode === 'login') {
+    _tooltipMode = 'welcome'
+    if (!loginWindow) createLoginWindow()
+  } else {
+    openHistory()
+  }
 })
 
 ipcMain.on('tooltip-dismiss', () => {
   tooltipWindow?.close()
+  if (_tooltipMode === 'login') {
+    _tooltipMode = 'welcome'
+    if (!loginWindow) createLoginWindow()
+  }
 })
 
 ipcMain.on('overlay-click-right', () => {
+  if (contextMenuWindow) { contextMenuWindow.close(); return }
+  if (!overlayWindow) return
+  const ob = overlayWindow.getBounds()
+  const w = 160, h = 86
+  const x = ob.x + ob.width + 4
+  const y = ob.y + Math.round((ob.height - h) / 2)
+  contextMenuWindow = new BrowserWindow({
+    width: w, height: h, x, y,
+    frame: false, transparent: true, alwaysOnTop: true,
+    skipTaskbar: true, resizable: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
+  })
+  contextMenuWindow.loadFile(path.join(__dirname, '..', 'renderer', 'contextmenu', 'index.html'))
+  contextMenuWindow.once('ready-to-show', () => {
+    contextMenuWindow?.showInactive()
+    contextMenuWindow?.setAlwaysOnTop(true, 'screen-saver')
+  })
+  contextMenuWindow.on('closed', () => { contextMenuWindow = null })
+})
+
+ipcMain.on('context-open-panel', () => {
+  contextMenuWindow?.close()
   openHistory()
+})
+
+ipcMain.on('context-close', () => {
+  contextMenuWindow?.close()
+})
+
+ipcMain.handle('quit-app', () => {
+  app.quit()
 })
 
 ipcMain.on('overlay-moved', (_, pos) => {
@@ -442,56 +523,60 @@ function maybeOpenWelcome() {
   showWelcomeTooltip(firstName)
 }
 
-function showWelcomeTooltip(firstName) {
-  if (tooltipWindow || !overlayWindow) return
+// ─── Tooltip reutilizable ─────────────────────────────────────────────────────
+// Uso: showTooltip({ message, mode: 'welcome'|'login'|'info', duration: ms })
+// mode 'login'  → al cerrar/clic abre loginWindow
+// mode 'welcome'→ al clic abre historyWindow
+// mode 'info'   → solo informativo, sin acción al cerrar
+function showTooltip({ message, mode = 'info', duration = 6000 }) {
+  if (tooltipWindow || !overlayWindow) {
+    if (mode === 'login' && !loginWindow) createLoginWindow()
+    return
+  }
 
-  const ob = overlayWindow.getBounds()
-  const tipW = 280
-  const tipH = 68
-  const gap  = 6
+  _tooltipMode = mode
 
-  // El círculo del ojo (54px) está centrado dentro de la ventana (84px)
+  const ob  = overlayWindow.getBounds()
+  const tipW = 280, tipH = 68, gap = 6
   const eyeCircleTop = ob.y + Math.round((ob.height - 54) / 2)
-  const x = ob.x + ob.width - tipW
+  const x = Math.max(0, ob.x + ob.width - tipW)
   const y = eyeCircleTop - tipH - gap
 
   tooltipWindow = new BrowserWindow({
-    width: tipW,
-    height: tipH,
-    x: Math.max(0, x),
-    y,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    resizable: false,
-    focusable: false,
+    width: tipW, height: tipH, x, y,
+    frame: false, transparent: true,
+    alwaysOnTop: true, skipTaskbar: true,
+    resizable: false, focusable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
+      contextIsolation: true, nodeIntegration: false
     }
   })
 
   tooltipWindow.loadFile(path.join(__dirname, '..', 'renderer', 'tooltip', 'index.html'))
-
   tooltipWindow.once('ready-to-show', () => {
     tooltipWindow?.showInactive()
     tooltipWindow?.setAlwaysOnTop(true, 'screen-saver')
   })
-
   tooltipWindow.webContents.once('did-finish-load', () => {
-    tooltipWindow?.webContents.send('show-tooltip', { firstName })
+    tooltipWindow?.webContents.send('show-tooltip', { message })
   })
-
   tooltipWindow.on('closed', () => { tooltipWindow = null })
+  setTimeout(() => tooltipWindow?.close(), duration)
+}
 
-  // Fallback: cerrar si el renderer no lo hizo (~9s)
-  setTimeout(() => tooltipWindow?.close(), 9000)
+function showWelcomeTooltip(firstName) {
+  const message = firstName ? `¡Hola ${firstName}! ¿Qué hacemos hoy?` : '¡Hola! ¿Qué hacemos hoy?'
+  showTooltip({ message, mode: 'welcome', duration: 9000 })
+}
+
+function showLoginRequiredTooltip() {
+  showTooltip({ message: 'Iniciá sesión para usar Iris', mode: 'login', duration: 5000 })
 }
 
 let tempSession  = null
 let activeChat   = null
+let _tooltipMode = 'welcome'
 
 // Limpiar entradas "null" que el modelo pudo haber guardado en memoria
 function cleanBadMemoryEntries() {
@@ -586,6 +671,9 @@ ipcMain.on('logout', async () => {
     await firebaseLogout()
   } catch (_) {}
   store.delete('user_session')
+  tempSession = null
+  historyWindow?.close()
+  activeChat = null
   createLoginWindow()
 })
 
@@ -666,15 +754,17 @@ ipcMain.handle('send-message', async (_, { message }) => {
 
   await saveMemory(userId, message, response, memory)
 
-  // Guardar Q&A en memoria vectorial (fire-and-forget, notifica si está llena)
-  guardarRecuerdoVectorial(userId, chat.game, `P: ${message}\nR: ${response}`)
-    .then(res => {
-      if (res?.full) {
-        chatWindow?.webContents.send('vector-memory-full', { juego: res.juego })
-        historyWindow?.webContents.send('vector-memory-full', { juego: res.juego })
-      }
-    })
-    .catch(() => {})
+  // Guardar en memoria vectorial solo cuando el usuario pide explícitamente recordar algo
+  if (esComandoDeMemoria(message)) {
+    guardarRecuerdoVectorial(userId, chat.game, message)
+      .then(res => {
+        if (res?.full) {
+          chatWindow?.webContents.send('vector-memory-full', { juego: res.juego })
+          historyWindow?.webContents.send('vector-memory-full', { juego: res.juego })
+        }
+      })
+      .catch(() => {})
+  }
 
   // Detectar juego actual desde memoria actualizada
   const updatedMem = getRawMemory(userId)
@@ -700,6 +790,12 @@ ipcMain.handle('send-message', async (_, { message }) => {
   if (chats.length > 50) chats.splice(50)
   store.set(`chats_${userId}`, chats)
   store.set(`chatmsgs_${chat.id}`, chat.messages)
+
+  _sessionMsgCount++
+  try {
+    const { logTelemetry } = require('./supabaseConfig')
+    logTelemetry('message_sent', userId, { type: 'text', game: currentGame, vision: visionUsed })
+  } catch (_) {}
 
   return { response, currentGame, visionUsed }
 })
@@ -813,7 +909,9 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   if (chat.messages.length > 200) chat.messages.splice(0, chat.messages.length - 200)
 
   await saveMemory(userId, message, response, memory)
-  guardarRecuerdoVectorial(userId, chat.game, `P: ${message}\nR: ${response}`).catch(() => {})
+  if (esComandoDeMemoria(message)) {
+    guardarRecuerdoVectorial(userId, chat.game, message).catch(() => {})
+  }
 
   const updatedMem   = getRawMemory(userId)
   const gameEntries  = Object.entries(updatedMem || {})
@@ -835,29 +933,45 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   store.set(`chats_${userId}`, chats)
   store.set(`chatmsgs_${chat.id}`, chat.messages)
 
+  _sessionMsgCount++
+  try {
+    const { logTelemetry } = require('./supabaseConfig')
+    logTelemetry('message_sent', userId, { type: 'voice', game: currentGame, vision: visionUsed })
+  } catch (_) {}
+
   return { response, transcription: message, currentGame, visionUsed }
 })
 
 ipcMain.handle('get-tip-dismissed', (_, key) => store.get(`tip_dismissed_${key}`, false))
 ipcMain.handle('dismiss-tip', (_, key) => { store.set(`tip_dismissed_${key}`, true) })
 
-const DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1528768906322509938/51hYtrxUv9_Z0OtuNd43xUVcmy2dMd4scGLfB4LMnZXrsgVnYw1ubutRe5yvANbRJhGJ'
-
 ipcMain.handle('send-feedback', async (_, { message, game }) => {
+  const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
+  if (!DISCORD_WEBHOOK) return { error: 'Feedback no configurado aún.' }
   try {
     const { version } = require('../package.json')
     const session = store.get('user_session') || tempSession
     const username = session?.name || session?.email || 'Anónimo'
+
+    const fields = [
+      { name: 'Usuario', value: username, inline: true },
+      { name: 'Juego', value: game || '—', inline: true },
+      { name: 'Versión', value: `v${version}`, inline: true },
+    ]
+    if (recentErrors.length > 0) {
+      fields.push({
+        name: 'Últimos errores',
+        value: recentErrors.slice(-5).map(e => `[${e.ctx}] ${e.msg}`).join('\n').substring(0, 1024),
+        inline: false
+      })
+    }
+
     const body = {
       embeds: [{
         title: '💬 Feedback de usuario',
         description: message,
         color: 0x38bdf8,
-        fields: [
-          { name: 'Usuario', value: username, inline: true },
-          { name: 'Juego', value: game || '—', inline: true },
-          { name: 'Versión', value: `v${version}`, inline: true },
-        ],
+        fields,
         timestamp: new Date().toISOString()
       }]
     }
@@ -867,6 +981,12 @@ ipcMain.handle('send-feedback', async (_, { message, game }) => {
       body: JSON.stringify(body)
     })
     if (!res.ok) return { error: `Error ${res.status}` }
+
+    try {
+      const { logTelemetry } = require('./supabaseConfig')
+      logTelemetry('feedback_sent', getActiveUserId(), { game: game || null })
+    } catch (_) {}
+
     return { ok: true }
   } catch (e) {
     return { error: e.message }
