@@ -1247,12 +1247,6 @@
       const panel = document.getElementById('settings-content')
       panel.innerHTML = `
         <div class="setting-block">
-          <h3>Cerrar aplicación</h3>
-          <p style="font-size:12px;color:var(--text2)">Cierra Iris completamente y la quita de la barra del sistema.</p>
-          <button class="btn-sm" style="margin-top:8px;color:#f87171;border-color:rgba(248,113,113,0.3)" onclick="window.api.invoke('quit-app')">Cerrar Iris</button>
-        </div>
-
-        <div class="setting-block">
           <h3>Atajo de voz <span style="font-size:10px;font-weight:600;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:4px;padding:2px 6px;letter-spacing:0.04em">BETA</span></h3>
           <p style="font-size:12px;color:var(--text2)">Combinación de teclas o botón del ratón para activar el micrófono. Evitá usar teclas que ya estén asignadas en tus juegos.</p>
           <div class="shortcut-row">
@@ -1264,6 +1258,9 @@
           <p id="shortcut-status" style="font-size:11px;color:#888"></p>
         </div>
 
+        <div style="margin-top:auto;padding-top:8px;border-top:1px solid var(--border);text-align:center">
+          <button style="background:none;border:none;font-size:11px;color:rgba(248,113,113,0.45);cursor:pointer;padding:4px 10px;border-radius:4px;transition:color 0.15s" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='rgba(248,113,113,0.45)'" onclick="window.api.invoke('quit-app')">Cerrar Iris</button>
+        </div>
       `
 
       const current = await window.api.invoke('get-voice-shortcut')
@@ -1433,8 +1430,16 @@
           <button id="feedback-send" class="btn-sm primary" style="min-width:90px">Enviar</button>
         </div>
         <div id="feedback-status" style="font-size:12px;min-height:18px;text-align:center"></div>
-        <div style="margin-top:auto;padding-top:12px;text-align:center;font-size:10px;color:var(--text3);letter-spacing:0.04em">© 2026 Iris by Cáceres</div>
+        <div style="margin-top:auto;padding-top:12px;text-align:center;font-size:10px;color:var(--text3);letter-spacing:0.04em">
+          <span id="app-version" style="display:block;font-size:11px;color:var(--text2);font-weight:600;margin-bottom:2px">Iris v—</span>
+          © 2026 Iris by Cáceres
+        </div>
       `
+
+      window.api.invoke('get-app-version').then(v => {
+        const el = document.getElementById('app-version')
+        if (el) el.textContent = 'Iris v' + v
+      }).catch(() => {})
 
       const textarea = document.getElementById('feedback-textarea')
       const chars    = document.getElementById('feedback-chars')

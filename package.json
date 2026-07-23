@@ -1,6 +1,6 @@
 {
   "name": "iris-overlay",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Universal AI overlay assistant for gamers. Real-time screen analysis, intelligent visual classifier and persistent memory.",
   "author": "Cáceres",
   "main": "src/main.js",
