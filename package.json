@@ -1,6 +1,6 @@
 {
   "name": "iris-overlay",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Universal AI overlay assistant for gamers. Real-time screen analysis, intelligent visual classifier and persistent memory.",
   "author": "Cáceres",
   "main": "src/main.js",
@@ -38,8 +38,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
       "installerIcon": "assets/icons/icon.ico",
       "uninstallerIcon": "assets/icons/icon.ico",
       "installerSidebar": "assets/installer/sidebar.bmp",
