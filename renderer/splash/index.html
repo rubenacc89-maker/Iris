@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 360px;
+      height: 160px;
+      background: transparent;
+      overflow: hidden;
+      user-select: none;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    #card {
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 10, 10, 0.96);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 24px 32px;
+
+      opacity: 0;
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    #logo {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+
+    #status {
+      font-size: 12px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.3px;
+    }
+
+    #bar-wrap {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #bar-wrap.visible { display: flex; }
+
+    #bar-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #bar-fill {
+      height: 100%;
+      width: 0%;
+      background: rgba(255,255,255,0.7);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    #pct {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      text-align: right;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="card">
+    <div id="logo">Iris</div>
+    <div id="status">Verificando actualizaciones...</div>
+    <div id="bar-wrap">
+      <div id="bar-track"><div id="bar-fill"></div></div>
+      <div id="pct">0%</div>
+    </div>
+  </div>
+
+  <script>
+    window.api.on('splash-status', (text) => {
+      document.getElementById('status').textContent = text
+    })
+
+    window.api.on('splash-progress', (pct) => {
+      document.getElementById('bar-wrap').classList.add('visible')
+      document.getElementById('bar-fill').style.width = pct + '%'
+      document.getElementById('pct').textContent = pct + '%'
+    })
+  </script>
+</body>
+</html>

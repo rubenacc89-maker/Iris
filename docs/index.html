@@ -112,6 +112,8 @@ nav {
   color: var(--accent);
   letter-spacing: 0.04em;
   margin-bottom: 1.5rem;
+  opacity: 0;
+  animation: line-up 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s forwards;
 }
 
 .hero-badge span { font-size: 8px; }
@@ -219,6 +221,8 @@ h1 em {
   display: flex;
   gap: 1.5rem;
   flex-wrap: wrap;
+  opacity: 0;
+  animation: line-up 0.55s cubic-bezier(0.22,1,0.36,1) 1.3s forwards;
 }
 
 .meta-item {
@@ -232,9 +236,16 @@ h1 em {
 .meta-item svg { width: 13px; height: 13px; stroke: var(--green); fill: none; stroke-width: 2.5; stroke-linecap: round; }
 
 /* ── HERO MOCKUP ─────────────────────────────────── */
+@keyframes hero-right-in {
+  from { opacity: 0; transform: translateX(40px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
 .hero-right {
   position: relative;
   height: 520px;
+  opacity: 0;
+  animation: hero-right-in 0.8s cubic-bezier(0.22,1,0.36,1) 0.5s forwards;
 }
 
 /* Ambient glow */
@@ -839,9 +850,9 @@ footer {
   <ul class="nav-links">
     <li><a href="#features">Funciones</a></li>
     <li><a href="#how">Cómo funciona</a></li>
-    <li><a href="mailto:rubenacc89@gmail.com">Contacto</a></li>
+    <li><a href="#contact">Contacto</a></li>
   </ul>
-  <a href="https://github.com/rubenacc89-maker/Iris/releases/latest" class="nav-cta">
+  <a href="https://github.com/rubenacc89-maker/Iris/releases/download/v1.0.2/Iris-Setup-1.0.2.exe" class="nav-cta" download>
     Descargar gratis
   </a>
 </nav>
@@ -856,7 +867,7 @@ footer {
 
   <div class="hero-left">
     <div class="hero-badge">
-      <span>●</span> IA para gamers · Windows
+      <span>●</span> IA para gamers · Windows · Beta
     </div>
     <h1>
       <span class="h1-line" style="--d:0s">Jugá más</span><br>
@@ -865,7 +876,7 @@ footer {
     </h1>
     <p class="hero-sub">Tu asistente de IA que ve tu pantalla, recuerda tus partidas y te responde por voz — sin salir del juego.</p>
     <div class="hero-actions">
-      <a href="https://github.com/rubenacc89-maker/Iris/releases/latest" class="btn-primary">
+      <a href="https://github.com/rubenacc89-maker/Iris/releases/download/v1.0.2/Iris-Setup-1.0.2.exe" class="btn-primary" download>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
           <rect width="24" height="24" fill="none"/>
           <path d="M3,12V6.75L9,5.43v6.48L3,12M20,3v8.75L10,11.9V5.21L20,3M3,13l6,.09V19.9L3,18.75V13m17,.25V22L10,20.09v-7Z"/>
@@ -970,8 +981,6 @@ footer {
     <div class="game-logo"><svg viewBox="0 0 500 250" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M451 63.5752V65.2548L443.427 107.027L406.46 117.117L415.701 110.18L415.146 109.412L374.102 125.729L432.514 137.482L413.549 192.859L333.336 182.626L375.355 179.674L405.615 146.506L358.55 133.279L364.008 107.871C389.89 94.7822 415.528 81.2194 441.326 67.9757C444.407 66.3969 447.705 64.5157 451 63.5752Z" fill="#6B6B6B"/><path d="M114.392 87.0938L97.5913 87.5053L151.801 109.55L152.175 138.276L117.766 149.865L166.101 180.081L178.477 181.152L182.053 181.983L123.234 188.088L94.6749 148.227L136.664 126.565L63.5191 107.064L48.2059 61.904L114.392 87.0938Z" fill="#6B6B6B"/><path d="M217.773 174.849L226.56 170.402L287.3 101.345C288.165 100.846 289.666 100.669 290.687 100.531C299.02 99.3886 310.013 98.3304 318.397 97.9861C319.17 97.9525 319.956 98.0365 320.729 98.0113L311.068 103.785L298.848 170.881L303.92 174.849H271.142L278.706 150.915H267.15L251.811 174.849H217.773ZM274.504 139.157H283.118C283.551 138.918 283.581 138.494 283.744 138.103C284.497 136.352 286.997 125.372 287.106 123.399C287.14 122.764 287.388 122.193 286.484 122.353L274.504 139.153V139.157Z" fill="#6B6B6B"/><path d="M180.792 174.849L188.365 171.196L199.526 100.501L224.501 101.786L210.003 147.979L243.831 102.42C255.236 101.408 266.813 101.648 278.286 101.375L266.914 106.17L208.322 174.853H180.797L180.792 174.849Z" fill="#6B6B6B"/><path d="M310.223 174.849L326.272 97.6627L364.853 91.2928L356.78 98.1288L335.857 158.893H364.643L375.775 151.334L365.693 174.849H310.223Z" fill="#6B6B6B"/><path d="M99.2638 124.465L95.8557 125.124L80.7737 178.208C82.5176 178.17 84.2784 178.271 86.0224 178.208C92.5107 177.96 99.7807 176.688 106.202 176.953C106.71 176.974 107.765 176.634 107.664 177.368L48 195L77 116.903L99.2638 124.469V124.465Z" fill="#6B6B6B"/><path d="M189.622 98.8468L176.17 175.273L175.136 175.256L153.057 162.462L157.44 162.626L158.012 161.954L165.702 101.572L165.248 99.8882L154.742 94.652L189.622 98.8468Z" fill="#6B6B6B"/></svg></div>
     <!-- Destiny -->
     <div class="game-logo"><svg viewBox="0 0 500 250" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M266.565 104.516H261.58V145.332H266.565V104.516Z" fill="#6B6B6B"/><path d="M47.6428 104.516H39.3353V145.332H47.4846C60.1436 145.332 70.1126 138.583 70.1126 124.686C70.1126 111.107 59.9062 104.516 47.6428 104.516ZM46.0604 140.727H44.3198V109.281H46.0604C56.2668 109.281 65.0489 113.092 65.0489 125.004C65.0489 136.836 56.2668 140.727 46.0604 140.727Z" fill="#6B6B6B"/><path d="M106.665 125.321H122.727V120.636H106.665V109.201H123.122V104.516H101.602V145.412H123.201V140.727H106.665V125.321Z" fill="#6B6B6B"/><path d="M216.72 145.332H221.704V109.201H231.198V104.516H207.225V109.201H216.72V145.332Z" fill="#6B6B6B"/><path d="M390.069 104.516L380.258 121.986L370.448 104.516H364.672L377.806 127.624V145.332H382.79V127.545L395.845 104.516H390.069Z" fill="#6B6B6B"/><path d="M330.176 134.692L300.111 102.61V145.332H305.095V114.919L335.161 147V104.516H330.176V134.692Z" fill="#6B6B6B"/><path d="M178.98 133.58C178.98 126.751 174.708 123.574 169.011 121.271L166.163 120.16C163.631 119.127 160.545 117.46 160.545 114.283C160.545 110.71 164.106 108.487 167.27 108.487C170.277 108.487 172.176 109.757 173.679 112.298L177.635 109.916C175.499 105.946 171.78 103.722 167.35 103.722C161.337 103.722 155.561 107.693 155.561 114.283C155.561 119.922 159.675 122.621 164.264 124.607L167.033 125.798C170.435 127.307 173.916 129.212 173.916 133.58C173.916 137.868 170.831 141.521 166.558 141.521C162.286 141.521 158.726 138.265 158.805 133.739L153.82 134.85C154.611 141.441 159.675 146.285 166.163 146.285C173.363 146.285 178.98 140.965 178.98 133.58Z" fill="#6B6B6B"/><path d="M439.164 111.265V119.27C439.164 121.798 441.322 123.84 443.995 123.84C446.598 123.84 448.757 121.798 448.825 119.27V111.265C448.825 108.737 446.667 106.63 443.995 106.63C441.322 106.662 439.164 108.769 439.164 111.265Z" fill="#6B6B6B"/><path d="M459.481 103.065C456.5 103.065 454.444 105.042 451.84 106.306C451.703 106.371 451.464 106.436 451.258 106.5V119.27C451.189 123.062 447.935 126.141 443.995 126.141C439.986 126.141 436.731 122.998 436.731 119.141V106.436L436.149 106.241C433.545 105.042 431.558 103 428.509 103C423.404 103 419.669 108.056 421.451 112.691C422.205 114.733 423.746 115.835 425.528 116.969C427.686 118.298 429.673 119.983 431.318 121.896C433.682 124.78 435.327 128.216 436.08 131.781C436.457 133.466 436.663 135.768 436.834 137.323C437.211 140.986 439.815 144 444.029 144C448.243 144 450.847 140.986 451.224 137.323C451.361 135.703 451.601 133.466 451.977 131.781C452.731 128.216 454.341 124.78 456.74 121.896C458.384 119.919 460.303 118.33 462.53 116.969C464.311 115.835 465.853 114.733 466.607 112.691C468.251 108.121 464.517 103.065 459.481 103.065Z" fill="#6B6B6B"/></svg></div>
-    <!-- Call of Duty -->
-    <div class="game-logo"><svg viewBox="50 70 410 120" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M289.212 43V75.3324H208.528V43H289.212ZM217.352 45.5194H211.049V72.3931H216.092V60.6358L218.214 72.3679C219.088 72.3931 220.714 72.7416 221.063 71.6918L223.236 60.2159V72.3931H232.481L233.082 68.5846L237.099 68.1983L237.523 72.3931H246.769V64.205L248.235 63.9993L250.525 72.2083L255.169 72.3931L252.248 62.5086L255.589 56.8609L258.068 72.1537L263.607 72.2167L267.78 48.8828V72.3973H277.025V67.7742H272.403V61.4756H277.029V56.4326H272.403L272.587 50.5288L277.029 50.1383V45.5194H263.157L260.846 61.4798L258.489 45.5656L253.908 45.5152V48.8744C252.669 48.0388 250.643 45.5152 249.08 45.5152H242.146V68.6098C241.524 68.3536 241.486 66.5019 241.373 65.8132C240.284 59.0696 239.478 52.2714 238.343 45.5404L231.636 45.5152L227.858 69.4538V45.5194L221.74 45.9141L219.664 58.9604L217.352 45.5194ZM282.488 45.5194H277.865V72.3931H286.69V67.77H282.488V45.5194Z" fill="#6B6B6B"/><path d="M246.769 58.9563V50.1384C251.504 50.025 251.509 59.0696 246.769 58.9563Z" fill="#6B6B6B"/><path d="M236.683 63.9909L233.741 63.9951L235.006 53.0818L236.683 63.9909Z" fill="#6B6B6B"/><path fill-rule="evenodd" clip-rule="evenodd" d="M73.6084 88.0599C73.6084 88.8038 74.0547 89.3988 74.501 89.6964C74.9473 90.1427 75.5424 90.2914 76.435 90.2914H83.1366C84.773 90.2914 85.5204 89.3988 85.5204 87.9076V83.5898C85.5204 82.2509 84.479 81.206 83.1366 81.206H73.6084V88.0564V88.0599ZM83.1401 83.8909V87.6136C83.1401 87.9112 82.9914 88.0599 82.8426 88.0599H76.5873C76.2897 88.0599 76.141 87.9112 76.141 87.7624V83.7421H82.8426C82.9914 83.5934 83.1401 83.5934 83.1401 83.8909ZM182.609 86.5723C182.906 86.721 183.353 86.8698 183.65 87.0186H190.649C191.244 87.0186 191.244 88.0599 190.649 88.0599H182.163L181.716 90.4438H191.096C191.542 90.4438 191.988 90.295 192.286 89.9975C193.773 88.9561 193.773 85.9772 192.286 84.9358C191.691 84.4895 190.947 84.6383 190.501 84.6383H184.096C183.501 84.6383 183.501 83.5969 184.096 83.5969H192.881L193.327 81.2131H183.647C183.2 81.2131 182.754 81.3619 182.457 81.6594C180.969 82.552 181.118 85.5309 182.605 86.5723H182.609ZM86.5653 90.295H89.0979V85.5309L92.2256 90.295H94.9069L98.1833 85.5309V90.295H100.567V81.0643H98.1833L93.568 87.9147L89.1015 81.0643H86.5689V90.295H86.5653ZM124.983 90.295H127.813L129.152 88.0599C129.152 87.9112 129.301 87.7624 129.449 87.7624H134.957V90.1462H137.341V80.9156H132.577C130.792 80.9156 130.044 81.9569 129.152 83.2994C129.003 83.5969 128.705 83.8944 128.557 84.192L124.983 90.2985V90.295ZM130.937 85.5273L131.978 83.8909C132.127 83.5934 132.276 83.5934 132.722 83.5934H135.106V85.5273H130.937ZM138.981 90.295H141.365V84.486L148.364 90.295H150.748V81.0643H148.364V86.8733L141.365 81.0643H138.981V90.295ZM152.083 87.9112C152.083 89.3988 152.976 90.295 154.467 90.295H163.846L163.549 87.9112H154.765C154.616 87.9112 154.318 87.7624 154.318 87.4649V83.5934H163.4L163.846 81.2096H151.934V87.9112H152.083ZM104.881 87.9112C104.881 89.3988 105.774 90.295 107.265 90.295H116.645L116.347 87.9112H107.563C107.414 87.9112 107.116 87.7624 107.116 87.4649V83.5934H116.198L116.645 81.2096H104.733V87.9112H104.881ZM60.655 83.5934H65.4191V90.295H67.8029V83.5934H72.567V81.0608H60.655V83.5934ZM169.953 86.8698V90.295H172.337V86.8698L177.25 81.0608H174.122L171.143 84.6347L168.164 81.0608H165.037L169.949 86.8698H169.953ZM117.835 90.295H124.239L125.875 87.9112H120.219V81.0608H117.835V90.2914V90.295Z" fill="#6B6B6B"/></svg></div>
   </div>
   <script>
     // Duplica los logos para el loop infinito
@@ -981,7 +990,7 @@ footer {
 </div>
 
 <!-- ── FEATURES ───────────────────────────────────── -->
-<div class="section section-divider" id="features">
+<div class="section" id="features">
   <div class="tag">Por qué Iris</div>
   <h2 class="sec-title">Todo lo que necesitás,<br>dentro del overlay</h2>
   <div class="features-grid">
@@ -1052,7 +1061,7 @@ footer {
 <div class="cta-section section-divider">
   <h2>Jugá más inteligente<br>desde hoy</h2>
   <p>Gratis. Sin suscripción. Sin límites de mensajes.</p>
-  <a href="https://github.com/rubenacc89-maker/Iris/releases/latest" class="btn-primary" style="display:inline-flex">
+  <a href="https://github.com/rubenacc89-maker/Iris/releases/download/v1.0.2/Iris-Setup-1.0.2.exe" class="btn-primary" style="display:inline-flex" download>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/>
@@ -1061,6 +1070,173 @@ footer {
     Descargar Iris
   </a>
 </div>
+
+<!-- ── CONTACT ────────────────────────────────────── -->
+<div class="contact-section section-divider" id="contact">
+  <div class="contact-inner">
+    <div class="contact-head">
+      <div class="tag">Contacto</div>
+      <h2 class="sec-title">¿Tenés alguna pregunta<br>o sugerencia?</h2>
+      <p class="contact-sub">Dejanos tu mensaje y te respondemos por email o Discord.</p>
+    </div>
+    <form class="contact-form" id="contactForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="cf-name">Nombre <span class="req">*</span></label>
+          <input type="text" id="cf-name" placeholder="Tu nombre" required autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="cf-email">Email <span class="req">*</span></label>
+          <input type="email" id="cf-email" placeholder="tu@email.com" required autocomplete="email">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="cf-subject">Asunto <span class="req">*</span></label>
+        <select id="cf-subject" required>
+          <option value="" disabled selected>Seleccioná un tema</option>
+          <option value="Consulta general">Consulta general</option>
+          <option value="Reporte de bug">Reporte de bug</option>
+          <option value="Sugerencia de feature">Sugerencia de feature</option>
+          <option value="Prensa / inversores">Prensa / inversores</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="cf-msg">Mensaje <span class="req">*</span></label>
+        <textarea id="cf-msg" rows="5" placeholder="Contanos en qué podemos ayudarte..." required></textarea>
+      </div>
+      <button type="submit" class="btn-submit" id="cf-submit">
+        <span id="cf-btn-text">Enviar mensaje</span>
+      </button>
+      <p class="form-notice" id="cf-notice"></p>
+    </form>
+  </div>
+</div>
+
+<style>
+.contact-section {
+  padding: 6rem 2rem;
+  background: var(--surface);
+}
+.contact-inner {
+  max-width: 680px;
+  margin: 0 auto;
+}
+.contact-head { margin-bottom: 2.5rem; }
+.contact-sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+.contact-form { display: flex; flex-direction: column; gap: 1.2rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+@media (max-width: 560px) { .form-row { grid-template-columns: 1fr; } }
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.form-group label {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.req { color: var(--accent); }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.form-group input::placeholder,
+.form-group textarea::placeholder { color: var(--muted); }
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus { border-color: var(--accent); }
+.form-group select option { background: var(--surface2); color: var(--text); }
+.form-group textarea { resize: vertical; min-height: 120px; }
+.btn-submit {
+  background: var(--accent);
+  color: #050609;
+  border: none;
+  border-radius: 8px;
+  padding: 0.85rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  align-self: flex-start;
+  letter-spacing: 0.03em;
+}
+.btn-submit:hover { background: #cccccc; }
+.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.form-notice {
+  font-size: 0.85rem;
+  min-height: 1.2em;
+  margin: 0;
+}
+.form-notice.ok { color: #22c55e; }
+.form-notice.err { color: #f87171; }
+</style>
+
+<script>
+document.getElementById('contactForm').addEventListener('submit', async function(e) {
+  e.preventDefault()
+  const btn    = document.getElementById('cf-submit')
+  const notice = document.getElementById('cf-notice')
+  const name   = document.getElementById('cf-name').value.trim()
+  const email  = document.getElementById('cf-email').value.trim()
+  const subject= document.getElementById('cf-subject').value
+  const msg    = document.getElementById('cf-msg').value.trim()
+
+  btn.disabled = true
+  document.getElementById('cf-btn-text').textContent = 'Enviando...'
+  notice.textContent = ''
+  notice.className = 'form-notice'
+
+  const payload = {
+    embeds: [{
+      title: `📬 ${subject}`,
+      color: 0xe0e0e0,
+      fields: [
+        { name: '👤 Nombre',  value: name,  inline: true },
+        { name: '📧 Email',   value: email, inline: true },
+        { name: '💬 Mensaje', value: msg }
+      ],
+      footer: { text: 'irisapp.lat · Formulario de contacto' },
+      timestamp: new Date().toISOString()
+    }]
+  }
+
+  try {
+    const res = await fetch('https://discord.com/api/webhooks/1529587590183915560/4zKD74Nm-rwheh2iZl66L2M4P-YT_YuCguue8CVohVUGvpS4pUqNLZgvxnfQSlnlGwAj', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (res.ok || res.status === 204) {
+      notice.textContent = '✓ Mensaje enviado. Te respondemos pronto.'
+      notice.className = 'form-notice ok'
+      document.getElementById('contactForm').reset()
+    } else {
+      throw new Error('Error ' + res.status)
+    }
+  } catch(err) {
+    notice.textContent = '✗ No se pudo enviar. Intentá de nuevo.'
+    notice.className = 'form-notice err'
+  } finally {
+    btn.disabled = false
+    document.getElementById('cf-btn-text').textContent = 'Enviar mensaje'
+  }
+})
+</script>
 
 <!-- ── FOOTER ─────────────────────────────────────── -->
 <footer>
@@ -1075,7 +1251,7 @@ footer {
     <li><a href="#features">Funciones</a></li>
     <li><a href="#how">Cómo funciona</a></li>
     <li><a href="https://github.com/rubenacc89-maker/Iris">GitHub</a></li>
-    <li><a href="mailto:rubenacc89@gmail.com">Contacto</a></li>
+    <li><a href="#contact">Contacto</a></li>
   </ul>
   <div class="footer-copy">© 2026 Iris by Cáceres</div>
 </footer>

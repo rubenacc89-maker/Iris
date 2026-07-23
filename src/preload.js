@@ -15,7 +15,7 @@ const INVOKE_CHANNELS = [
   'get-chats', 'get-active-chat', 'switch-chat', 'rename-chat', 'delete-chat', 'get-chat-messages',
   'get-voice-shortcut', 'set-voice-shortcut', 'get-voice-logs',
   'get-tip-dismissed', 'dismiss-tip',
-  'send-feedback',
+  'send-feedback', 'get-app-version',
   'take-screenshot',
   'quit-app',
 ]
@@ -23,6 +23,8 @@ const INVOKE_CHANNELS = [
 const RECEIVE_CHANNELS = [
   'show-tooltip', 'voice-state', 'start-voice', 'stop-voice',
   'cursor-pos', 'vector-memory-full',
+  'update-progress', 'update-installing', 'update-error',
+  'splash-status', 'splash-progress',
 ]
 
 contextBridge.exposeInMainWorld('api', {

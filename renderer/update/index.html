@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: transparent;
+      width: 280px;
+      height: 90px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 10px 14px 0px 10px;
+      user-select: none;
+    }
+
+    #bubble {
+      position: relative;
+      background: rgba(10, 10, 10, 0.92);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 20px;
+      padding: 12px 16px 11px;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #e8e8e8;
+      width: 100%;
+
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    #bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      right: 18px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid rgba(10,10,10,0.92);
+    }
+
+    #text {
+      display: block;
+      margin-bottom: 9px;
+      white-space: nowrap;
+    }
+
+    #bar-track {
+      background: rgba(255,255,255,0.12);
+      border-radius: 4px;
+      height: 3px;
+      overflow: hidden;
+    }
+
+    #bar-fill {
+      background: rgba(255,255,255,0.75);
+      height: 100%;
+      width: 0%;
+      border-radius: 4px;
+      transition: width 0.35s ease;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="bubble">
+    <span id="text">Recibiendo actualización... 0%</span>
+    <div id="bar-track"><div id="bar-fill"></div></div>
+  </div>
+
+  <script>
+    let pct = 0
+    let installing = false
+    let usingRealProgress = false
+
+    function setPercent(val) {
+      pct = val
+      document.getElementById('text').textContent = `Recibiendo actualización... ${Math.round(pct)}%`
+      document.getElementById('bar-fill').style.width = Math.round(pct) + '%'
+    }
+
+    // Animación estimada: sube lento hasta 90%, deja espacio para el tramo final real
+    const fakeTimer = setInterval(() => {
+      if (installing || usingRealProgress) return
+      if (pct < 88) {
+        const step = pct < 30 ? 1.5 : pct < 60 ? 0.8 : 0.3
+        setPercent(Math.min(pct + step, 88))
+      }
+    }, 400)
+
+    // Si llegan eventos reales, los usa y cancela la estimación
+    window.api.on('update-progress', (data) => {
+      usingRealProgress = true
+      setPercent(Math.round(data.percent || 0))
+    })
+
+    window.api.on('update-installing', () => {
+      installing = true
+      usingRealProgress = true
+      clearInterval(fakeTimer)
+      pct = 100
+      document.getElementById('bar-fill').style.width = '100%'
+      document.getElementById('text').textContent = 'Instalando actualización...'
+    })
+
+    window.api.on('update-error', (msg) => {
+      clearInterval(fakeTimer)
+      document.getElementById('text').textContent = 'Error: ' + msg
+      document.getElementById('bar-fill').style.background = 'rgba(255,80,80,0.6)'
+      document.getElementById('bar-fill').style.width = '100%'
+    })
+  </script>
+</body>
+</html>

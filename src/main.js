@@ -34,6 +34,10 @@ let chatWindow = null
 let historyWindow = null
 let loginWindow = null
 let tooltipWindow = null
+let updateWindow = null
+let splashWindow = null
+let ulog = () => {}
+let updateInfo = null
 let contextMenuWindow = null
 let voiceWindow = null
 let cursorInterval = null
@@ -45,6 +49,15 @@ const isDev = !app.isPackaged
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
+}
+
+function normalStartup() {
+  createTray()
+  createOverlay()
+  createVoiceWindow()
+  checkLogin()
+  uIOhook.start()
+  registerVoiceShortcut(store.get('voice_shortcut', 'F9'))
 }
 
 app.whenReady().then(async () => {
@@ -70,25 +83,13 @@ app.whenReady().then(async () => {
     callback(permission === 'media')
   })
 
-  createTray()
-  createOverlay()
-  createVoiceWindow()
-  checkLogin()
-
-  // Atajo de voz con uiohook (funciona con Vanguard y otros anti-cheats)
-  uIOhook.start()
-  registerVoiceShortcut(store.get('voice_shortcut', 'F9'))
-
   if (!isDev) {
-    const { autoUpdater } = require('electron-updater')
-    autoUpdater.on('update-available', () => {
-      if (tray) tray.setToolTip('Iris — Actualizando...')
-    })
-    autoUpdater.on('update-downloaded', () => {
-      autoUpdater.quitAndInstall()
-    })
-    autoUpdater.checkForUpdatesAndNotify()
+    setupUpdaterWithSplash()
+  } else {
+    normalStartup()
   }
+
+  // setupUpdaterWithSplash() called above for !isDev
 })
 
 // Re-asercionar always-on-top cada 1.5s por si el juego lo pisa
@@ -112,6 +113,199 @@ app.on('will-quit', () => {
     })
   } catch (_) {}
 })
+
+// ─── Splash + Updater ────────────────────────────────────────────────────────
+
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 360, height: 160,
+    frame: false, transparent: true,
+    center: true, alwaysOnTop: true,
+    skipTaskbar: true, resizable: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false
+    }
+  })
+  splashWindow.loadFile(path.join(__dirname, '..', 'renderer', 'splash', 'index.html'))
+  splashWindow.on('closed', () => { splashWindow = null })
+}
+
+function setupUpdaterWithSplash() {
+  const fs = require('fs')
+  const { autoUpdater } = require('electron-updater')
+  const logPath = path.join(app.getPath('userData'), 'update.log')
+  ulog = (msg) => fs.appendFileSync(logPath, `[${new Date().toTimeString().slice(0,8)}] ${msg}\n`)
+  fs.writeFileSync(logPath, `--- Iris update log ${new Date().toISOString()} ---\n`)
+
+  createSplash()
+
+  const launchNormal = () => {
+    splashWindow?.webContents.send('splash-status', 'Iniciando Iris...')
+    setTimeout(() => { splashWindow?.close(); normalStartup() }, 700)
+  }
+
+  autoUpdater.autoDownload = false
+  autoUpdater.on('checking-for-update',  () => {
+    ulog('checking-for-update')
+    splashWindow?.webContents.send('splash-status', 'Verificando actualizaciones...')
+  })
+  autoUpdater.on('update-not-available', () => { ulog('update-not-available'); launchNormal() })
+  autoUpdater.on('error', (err) => { ulog(`error: ${err.message}`); launchNormal() })
+
+  autoUpdater.on('update-available', (info) => {
+    updateInfo = info
+    ulog(`update-available: v${info.version}`)
+    splashWindow?.webContents.send('splash-status', `Descargando actualización v${info.version}...`)
+    startSplashDownload()
+  })
+
+  ulog('checkForUpdates iniciado')
+  autoUpdater.checkForUpdates()
+}
+
+function startSplashDownload() {
+  if (!updateInfo) return
+  const https      = require('https')
+  const fsU        = require('fs')
+  const os         = require('os')
+  const { spawn }  = require('child_process')
+
+  const filename  = updateInfo.files?.[0]?.url || `Iris-Setup-${updateInfo.version}.exe`
+  const version   = updateInfo.version
+  const startUrl  = `https://github.com/rubenacc89-maker/Iris/releases/download/v${version}/${filename}`
+  const tmpFile   = path.join(os.tmpdir(), `IrisUpdate_${version}.exe`)
+
+  ulog(`URL: ${startUrl}`)
+  try { fsU.unlinkSync(tmpFile) } catch (_) {}
+
+  let lastPct = -1
+
+  const doDownload = (url, hops) => {
+    if (hops > 10) { ulog('ERROR: too many redirects'); return }
+    const parsed = new URL(url)
+    https.get(
+      { hostname: parsed.hostname, path: parsed.pathname + parsed.search, headers: { 'User-Agent': 'Iris-Updater' } },
+      (res) => {
+        ulog(`HTTP ${res.statusCode} ← ${parsed.hostname}`)
+        if ([301, 302, 307, 308].includes(res.statusCode)) {
+          res.destroy(); doDownload(res.headers.location, hops + 1); return
+        }
+        if (res.statusCode !== 200) {
+          ulog(`ERROR HTTP ${res.statusCode}`)
+          splashWindow?.webContents.send('splash-status', 'Error al descargar. Iniciando Iris...')
+          setTimeout(() => { splashWindow?.close(); normalStartup() }, 1500)
+          res.destroy(); return
+        }
+        const total = parseInt(res.headers['content-length'] || '0', 10)
+        let downloaded = 0
+        ulog(`tamaño: ${Math.round(total / 1024 / 1024)} MB`)
+        const ws = fsU.createWriteStream(tmpFile)
+        res.on('data', (chunk) => {
+          downloaded += chunk.length
+          if (total > 0) {
+            const pct = Math.round(downloaded / total * 100)
+            if (pct !== lastPct) {
+              lastPct = pct
+              if (pct % 10 === 0) ulog(`progreso: ${pct}%`)
+              splashWindow?.webContents.send('splash-progress', pct)
+            }
+          }
+        })
+        res.pipe(ws)
+        ws.on('finish', () => {
+          ulog('descarga completa')
+          splashWindow?.webContents.send('splash-status', 'Instalando actualización...')
+          splashWindow?.webContents.send('splash-progress', 100)
+
+          // Pequeño delay para que el UI renderice "Instalando..."
+          setTimeout(() => {
+            const irisExe  = app.getPath('exe')
+            const userData = app.getPath('userData')
+            const esc      = (p) => p.replace(/'/g, "''")
+            const { spawn: spawnW } = require('child_process')
+            const vbsPath  = path.join(userData, 'iris_update.vbs')
+
+            // PS1: muestra splash WinForms nativo mientras instala → sin brecha visual
+            const psScript = [
+              // Splash nativo con WinForms
+              `Add-Type -AssemblyName System.Windows.Forms,System.Drawing`,
+              `$f = New-Object System.Windows.Forms.Form`,
+              `$f.ClientSize = New-Object System.Drawing.Size(360,140)`,
+              `$f.StartPosition = 'CenterScreen'`,
+              `$f.FormBorderStyle = 'None'`,
+              `$f.BackColor = [System.Drawing.Color]::FromArgb(12,12,12)`,
+              `$f.TopMost = $true`,
+              `$f.ShowInTaskbar = $false`,
+              `$t = New-Object System.Windows.Forms.Label`,
+              `$t.Text = 'I R I S'`,
+              `$t.Font = New-Object System.Drawing.Font('Segoe UI',18,[System.Drawing.FontStyle]::Bold)`,
+              `$t.ForeColor = [System.Drawing.Color]::White`,
+              `$t.SetBounds(0,25,360,50)`,
+              `$t.TextAlign = 'MiddleCenter'`,
+              `$f.Controls.Add($t)`,
+              `$s = New-Object System.Windows.Forms.Label`,
+              `$s.Text = 'Instalando actualizacion...'`,
+              `$s.Font = New-Object System.Drawing.Font('Segoe UI',9)`,
+              `$s.ForeColor = [System.Drawing.Color]::FromArgb(160,160,160)`,
+              `$s.SetBounds(0,85,360,30)`,
+              `$s.TextAlign = 'MiddleCenter'`,
+              `$f.Controls.Add($s)`,
+              `$f.Show()`,
+              `[System.Windows.Forms.Application]::DoEvents()`,
+              // Esperar a que Iris libere los archivos
+              `Start-Sleep -Seconds 2`,
+              // Instalar silencioso
+              `Start-Process '${esc(tmpFile)}' -ArgumentList '/S' -Wait`,
+              // Actualizar texto y relanzar
+              `$s.Text = 'Abriendo Iris...'`,
+              `[System.Windows.Forms.Application]::DoEvents()`,
+              `Start-Sleep -Milliseconds 800`,
+              `Start-Process '${esc(irisExe)}'`,
+              `Start-Sleep -Milliseconds 600`,
+              `$f.Close()`
+            ].join('; ')
+
+            const encoded = Buffer.from(psScript, 'utf16le').toString('base64')
+
+            // wscript.exe (GUI, sin consola) lanza PowerShell oculto vía VBScript
+            // WScript.Shell.Run con WindowStyle=0 → proceso completamente invisible
+            // y fuera del Job Object de Electron
+            const psCmd = `powershell -Sta -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${encoded}`
+            const vbs = [
+              'Set sh = CreateObject("WScript.Shell")',
+              `sh.Run "${psCmd.replace(/"/g, '""')}", 0, False`
+            ].join('\n')
+            fsU.writeFileSync(vbsPath, vbs, 'utf8')
+
+            const vbsProc = spawnW('wscript.exe', ['//B', '//nologo', vbsPath], {
+              windowsHide: true, stdio: 'ignore', detached: true
+            })
+            vbsProc.unref()
+            vbsProc.on('close', (code) => { ulog(`wscript exit: ${code}`) })
+
+            ulog('wmic lanzado, cerrando Iris en 1.5s')
+
+            // Cerramos nosotros mismos → archivos liberados → PS1 instala sin locks
+            setTimeout(() => { ulog('app.exit'); app.exit(0) }, 1500)
+          }, 800)
+        })
+        ws.on('error', (e) => { ulog(`error escritura: ${e.message}`) })
+        res.on('error', (e) => { ulog(`error respuesta: ${e.message}`) })
+      }
+    ).on('error', (e) => {
+      ulog(`error conexión: ${e.message}`)
+      splashWindow?.webContents.send('splash-status', 'Error de red. Iniciando Iris...')
+      setTimeout(() => { splashWindow?.close(); normalStartup() }, 1500)
+    }).setTimeout(30000, function () {
+      ulog('TIMEOUT 30s'); this.destroy()
+      splashWindow?.webContents.send('splash-status', 'Timeout. Iniciando Iris...')
+      setTimeout(() => { splashWindow?.close(); normalStartup() }, 1500)
+    })
+  }
+
+  doDownload(startUrl, 0)
+}
 
 // ─── Tray ────────────────────────────────────────────────────────────────────
 
@@ -483,6 +677,8 @@ ipcMain.on('context-close', () => {
   contextMenuWindow?.close()
 })
 
+ipcMain.handle('get-app-version', () => app.getVersion())
+
 ipcMain.handle('quit-app', () => {
   app.quit()
 })
@@ -562,7 +758,7 @@ function showTooltip({ message, mode = 'info', duration = 6000 }) {
     tooltipWindow?.webContents.send('show-tooltip', { message })
   })
   tooltipWindow.on('closed', () => { tooltipWindow = null })
-  setTimeout(() => tooltipWindow?.close(), duration)
+  if (duration > 0) setTimeout(() => tooltipWindow?.close(), duration)
 }
 
 function showWelcomeTooltip(firstName) {
