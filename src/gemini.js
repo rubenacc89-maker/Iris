@@ -87,7 +87,14 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   messages.push({ role: 'user', content: userText })
 
   try {
-    const data = await edgeFetch({ type: 'chat', messages, max_tokens: 500 })
+    const data = await edgeFetch({
+      type: 'grounded-chat',
+      systemPrompt,
+      userText,
+      chatHistory: (recentHistory || []).map(e => ({ question: e.question, answer: e.answer })),
+      messages,        // Groq fallback dentro del Edge Function si Gemini falla
+      max_tokens: 500,
+    })
     return { text: data.text, vision: false }
   } catch (err) {
     const msg = err.message || String(err)
