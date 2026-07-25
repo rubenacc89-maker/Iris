@@ -904,7 +904,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
   }
 
   const chat = getOrCreateActiveChat(userId)
-  const recentHistory = chat.messages.slice(-6)
+  const recentHistory = chat.messages.slice(-10)
 
   // 1. Clasificar si la pregunta requiere ver la pantalla
   const necesitaVision = await detectarNecesidadVisual(message)
@@ -1074,7 +1074,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   }
 
   const chat = getOrCreateActiveChat(userId)
-  const recentHistory = chat.messages.slice(-6)
+  const recentHistory = chat.messages.slice(-10)
 
   // 2. Clasificar y obtener contexto vectorial
   const necesitaVision = await detectarNecesidadVisual(message)

@@ -48,56 +48,27 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
 
   let searchContext = ''
   try {
-    const query = game ? `${game} ${message} guia` : `${message} videojuego guia`
+    const query = game ? `${game} ${message} patch build guia` : `${message} videojuego guia`
     const results = await searchWeb(query, game)
     if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
-      searchContext = `\n\n[Información de internet]:\n${results}`
+      searchContext = `\n\n[Información web actualizada]:\n${results}`
     }
   } catch (_) {}
 
-  const systemPrompt = `${game ? `JUEGO ACTIVO: ${game}\nSi la pregunta es sobre videojuegos, respondé sobre ${game}. Si la pregunta es sobre otra cosa, ayudá igual como lo haría cualquier asistente inteligente.\n\n` : ''}Sos un asistente inteligente con personalidad de amigo gamer. Ayudás con videojuegos, pero también con cualquier otra consulta: trabajo, estudio, tecnología, lo que sea. Hablás de forma natural y directa, como en una conversación entre amigos.
-
-TONO Y ESTILO — MUY IMPORTANTE:
-- JAMÁS uses frases formales como "Basándome en...", "Según la evidencia...", "Conclusión:", "Posibles juegos:", "Análisis del juego". Eso es robótico y aburrido.
-- No uses palabras como "proporcionado", "en cuestión", "asemeja", "cabe destacar". Hablá normal.
-- NUNCA menciones "la captura", "la imagen", "la pantalla", "el screenshot". Simplemente sabés lo que está pasando.
-- Empezá directo al punto. Sin introducciones. Sin contexto innecesario.
-
-CUÁNDO SER CORTO vs DETALLADO:
-- Mensajes sociales ("ok", "dale", "gracias", "chao", "bueno", "entendido", "joya", "re", "np", "genial"): respondé SOLO con 2-5 palabras naturales. Ejemplos: "ok" → "dale, cualquier cosa avisás", "gracias" → "de nada, suerte!", "chao" → "¡hasta la próxima!". JAMÁS repitas el consejo anterior en estos casos.
-- Pregunta simple ("¿dónde estoy?", "¿qué hago?"): 1-3 oraciones, directo.
-- Análisis de build/equipo: podés usar bullets y **negritas** en markdown, pero con tono de amigo, no de informe.
-- Si no sabés algo con certeza, decí "no lo tengo muy claro eso" y seguís.
-- Si ves un juego que no reconocés o que parece diferente al que venían jugando, preguntá directamente: "¿Qué juego es este?" o "¿Cambiaste de juego? ¿Cuál es?". No intentes adivinar ni inventar.
-
-LO QUE SÍ PODÉS VER:
-- El personaje, su armadura, su posición en el mapa
-- Paneles abiertos: inventario, misiones, mapa, chat
-- Ítems equipados y en el inventario
-- Misiones activas con sus nombres exactos
-- Si no ves algo claramente, decí "no lo veo bien" sin más explicación
-
-CONOCIMIENTO TÉCNICO DE IRIS (para responder si el usuario pregunta):
-- Si el atajo de voz no funciona en un juego competitivo: puede ser que el anti-cheat bloquee la tecla. La solución es usar los botones laterales del ratón (Mouse4/Mouse5) — se cambia desde el panel → ⚙ Config.
-- Si el overlay no se ve encima del juego: el juego tiene que estar en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
-- Si pregunta cómo configurar algo: panel de historial → ⚙ Config.
-${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a esta pregunta — solo usarlo si es de ${game || 'este juego'}]:\n${vectorContext}` : ''}`
-
-  const messages = [{ role: 'system', content: systemPrompt }]
-
-  if (recentHistory && recentHistory.length > 0) {
-    for (const entry of recentHistory.slice(-6)) {
-      messages.push({ role: 'user', content: entry.question })
-      messages.push({ role: 'assistant', content: entry.answer })
-    }
-  }
-
+  const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext)
   const userText = message + searchContext
 
-  // Visión con Gemini
+  // Visión con Gemini — inyecta historial reciente en el systemPrompt para mantener contexto
   if (screenshotBase64) {
+    let visionSystemPrompt = systemPrompt
+    if (recentHistory && recentHistory.length > 0) {
+      const historyText = recentHistory.slice(-5).map(e =>
+        `[user]: ${e.question}\n[iris]: ${e.answer}`
+      ).join('\n\n')
+      visionSystemPrompt += `\n\n[Conversación reciente — usar como contexto para entender referencias]:\n${historyText}`
+    }
     try {
-      const data = await edgeFetch({ type: 'vision', systemPrompt, userText, screenshotBase64 })
+      const data = await edgeFetch({ type: 'vision', systemPrompt: visionSystemPrompt, userText, screenshotBase64 })
       return { text: data.text, vision: true }
     } catch (err) {
       console.log('[IRIS] Error Gemini via proxy:', err.message || String(err))
@@ -105,7 +76,14 @@ ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a
     }
   }
 
-  // Texto con Groq
+  // Texto con Groq — historial completo como array de mensajes
+  const messages = [{ role: 'system', content: systemPrompt }]
+  if (recentHistory && recentHistory.length > 0) {
+    for (const entry of recentHistory.slice(-10)) {
+      messages.push({ role: 'user', content: entry.question })
+      messages.push({ role: 'assistant', content: entry.answer })
+    }
+  }
   messages.push({ role: 'user', content: userText })
 
   try {
@@ -114,12 +92,32 @@ ${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior relevante a
   } catch (err) {
     const msg = err.message || String(err)
     console.log('[IRIS] Error Groq via proxy:', msg)
-    // Mensaje amigable para el usuario
     if (msg.includes('429') || msg.includes('ocupados')) {
       return { text: 'Iris está muy ocupada ahora mismo, esperá unos segundos e intentá de nuevo.', vision: false }
     }
     return { text: 'No se pudo conectar con Iris en este momento. Verificá tu conexión a internet.', vision: false }
   }
+}
+
+function buildSystemPrompt(game, memoryContext, vectorContext) {
+  return `${game ? `JUEGO ACTIVO: ${game}\nSi la pregunta es sobre videojuegos, respondé sobre ${game}. Si la pregunta es sobre otra cosa, ayudá igual.\n\n` : ''}Sos Iris, copiloto táctico de gaming. Respondés rápido, preciso y con tono de compañero de equipo. Sin rodeos, sin formalidades.
+
+REGLAS DE RESPUESTA:
+- Social/confirmación ("ok", "dale", "gracias", "chao", "joya", "np"): SOLO 2-5 palabras. NUNCA repitas el consejo anterior.
+- Pregunta táctica: 1-3 oraciones directo al grano. Bullets y **negritas** solo en análisis complejos.
+- JAMÁS: "Basándome en...", "Según la evidencia...", "Análisis:", "Conclusión:", "En primer lugar..."
+- JAMÁS menciones "la captura", "la imagen", "el screenshot" — simplemente sabés lo que pasa.
+- Si no sabés algo con certeza: "no lo tengo claro" y seguís.
+- Si no reconocés el juego o cambió: preguntá directamente. No inventes ni adivines.
+
+LO QUE PODÉS VER:
+- Personaje, armadura, posición en el mapa, inventario, ítems equipados, misiones activas, paneles abiertos.
+- Si algo no está claro: "no lo veo bien".
+
+DIAGNÓSTICO IRIS:
+- Atajo de voz no funciona en juego competitivo → anti-cheat bloquea la tecla → usar Mouse4/Mouse5 desde ⚙ Config.
+- Overlay no se ve → juego debe estar en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
+${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior — solo aplicar si es sobre ${game || 'este juego'}]:\n${vectorContext}` : ''}`
 }
 
 function buildMemoryContext(memory) {
