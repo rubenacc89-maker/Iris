@@ -416,7 +416,7 @@ function startCursorTracking() {
       x: cursor.x, y: cursor.y,
       cx: b.x + 42, cy: b.y + 42   // centro del botón dentro de la ventana 84px
     })
-  }, 33) // ~30 fps
+  }, 100) // 10fps es suficiente para detección de proximidad, menos IPC acumulado
 }
 
 // ─── Ventana de voz (oculta, focusable) ──────────────────────────────────────
@@ -921,6 +921,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
         screenshotBase64 = sources[0].thumbnail.toJPEG(70).toString('base64')
         console.log('[IRIS] Screenshot capturado → Gemini Vision')
       }
+      sources.length = 0 // liberar referencias NativeImage explícitamente
     } catch (e) {
       console.log('[IRIS] Error capturando screenshot:', e.message)
     }
@@ -1083,6 +1084,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 720 } })
       if (sources.length) { screenshotBase64 = sources[0].thumbnail.toJPEG(70).toString('base64') }
+      sources.length = 0
     } catch (_) {}
   }
 
