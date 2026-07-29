@@ -651,7 +651,7 @@ ipcMain.on('overlay-click-right', () => {
   if (contextMenuWindow) { contextMenuWindow.close(); return }
   if (!overlayWindow) return
   const ob = overlayWindow.getBounds()
-  const w = 160, h = 86
+  const w = 160, h = 185
   const x = ob.x + ob.width + 4
   const y = ob.y + Math.round((ob.height - h) / 2)
   contextMenuWindow = new BrowserWindow({
@@ -671,6 +671,19 @@ ipcMain.on('overlay-click-right', () => {
 ipcMain.on('context-open-panel', () => {
   contextMenuWindow?.close()
   openHistory()
+})
+
+ipcMain.on('context-open-tab', (_, { tab }) => {
+  contextMenuWindow?.close()
+  const alreadyOpen = !!historyWindow
+  openHistory()
+  if (alreadyOpen) {
+    historyWindow?.webContents.send('show-tab', tab)
+  } else {
+    historyWindow?.webContents.once('did-finish-load', () => {
+      historyWindow?.webContents.send('show-tab', tab)
+    })
+  }
 })
 
 ipcMain.on('context-close', () => {

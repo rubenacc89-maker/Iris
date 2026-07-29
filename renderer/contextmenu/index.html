@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { background: transparent; width: 160px; height: 86px; overflow: hidden; }
+    html, body { background: transparent; width: 160px; height: 185px; overflow: hidden; }
 
     .menu {
       background: rgba(13, 15, 20, 0.97);
@@ -44,6 +44,25 @@
       Abrir panel
     </div>
     <div class="sep"></div>
+    <div class="menu-item" id="btn-juegos">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01M8 12h.01"/><path d="M16 10v4"/>
+      </svg>
+      Juegos
+    </div>
+    <div class="menu-item" id="btn-config">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Config
+    </div>
+    <div class="menu-item" id="btn-ayuda">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      Ayuda & Bugs
+    </div>
+    <div class="sep"></div>
     <div class="menu-item danger" id="btn-quit">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -57,6 +76,15 @@
   <script>
     document.getElementById('btn-open').addEventListener('click', () => {
       window.api.send('context-open-panel')
+    })
+    document.getElementById('btn-juegos').addEventListener('click', () => {
+      window.api.send('context-open-tab', { tab: 'memory' })
+    })
+    document.getElementById('btn-config').addEventListener('click', () => {
+      window.api.send('context-open-tab', { tab: 'settings' })
+    })
+    document.getElementById('btn-ayuda').addEventListener('click', () => {
+      window.api.send('context-open-tab', { tab: 'feedback' })
     })
     document.getElementById('btn-quit').addEventListener('click', () => {
       window.api.invoke('quit-app')

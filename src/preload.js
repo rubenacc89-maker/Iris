@@ -6,7 +6,7 @@ const SEND_CHANNELS = [
   'login-success', 'logout',
   'tooltip-click', 'tooltip-dismiss',
   'voice-state', 'voice-log',
-  'context-open-panel', 'context-close',
+  'context-open-panel', 'context-open-tab', 'context-close',
 ]
 
 const INVOKE_CHANNELS = [
@@ -22,7 +22,7 @@ const INVOKE_CHANNELS = [
 
 const RECEIVE_CHANNELS = [
   'show-tooltip', 'voice-state', 'start-voice', 'stop-voice',
-  'cursor-pos', 'vector-memory-full',
+  'cursor-pos', 'vector-memory-full', 'show-tab',
   'update-progress', 'update-installing', 'update-error',
   'splash-status', 'splash-progress',
 ]
