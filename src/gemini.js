@@ -18,7 +18,14 @@ async function edgeFetch(body) {
   return data
 }
 
+const SOCIAL_RE = /^(ok|dale|gracias|chao|bueno|entendido|joya|re|np|genial|listo|sí|si|no|bien|mal|hola|hey|perfecto|claro|obvio|ya|nop|nope|gg|wp|xd|ajá|aja|mhm|uh|ah|oh|wow|nice|cool|okok|mm|hmm|oki|okie)\.?[!?]?$/i
+
 async function detectarNecesidadVisual(pregunta) {
+  // Fast path: mensajes sociales o muy cortos nunca necesitan visión
+  if (pregunta.trim().length < 4 || SOCIAL_RE.test(pregunta.trim())) {
+    console.log(`[CLASIFICADOR] Fast-path NO visión: "${pregunta.slice(0, 40)}"`)
+    return false
+  }
   try {
     const data = await edgeFetch({
       type: 'classify',
@@ -46,14 +53,18 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   const gameEntries = Object.entries(memory || {}).filter(([n]) => n && n.toLowerCase() !== 'null').sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
   const game = gameEntries[0]?.[0] || ''
 
+  // Skip web search en visión (Gemini ya ve la pantalla) o mensajes cortos/sociales
   let searchContext = ''
-  try {
-    const query = game ? `${game} ${message} patch build guia` : `${message} videojuego guia`
-    const results = await searchWeb(query, game)
-    if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
-      searchContext = `\n\n[Información web actualizada]:\n${results}`
-    }
-  } catch (_) {}
+  const shouldSearch = !screenshotBase64 && message.length > 20 && !SOCIAL_RE.test(message.trim())
+  if (shouldSearch) {
+    try {
+      const query = game ? `${game} ${message} patch build guia` : `${message} videojuego guia`
+      const results = await searchWeb(query, game)
+      if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
+        searchContext = `\n\n[Información web actualizada]:\n${results}`
+      }
+    } catch (_) {}
+  }
 
   const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext)
   const userText = message + searchContext
