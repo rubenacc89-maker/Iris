@@ -42,6 +42,7 @@ let contextMenuWindow = null
 let voiceWindow = null
 let cursorInterval = null
 let _lastCursorX = -1, _lastCursorY = -1
+let _cursorWasInRange = false
 
 const isDev = !app.isPackaged
 
@@ -100,7 +101,7 @@ setInterval(() => {
   if (historyWindow && !historyWindow.isDestroyed()) {
     historyWindow.setAlwaysOnTop(true, 'screen-saver')
   }
-}, 1500)
+}, 5000)
 
 app.on('will-quit', () => {
   uIOhook.stop()
@@ -412,11 +413,17 @@ function startCursorTracking() {
     if (cursor.x === _lastCursorX && cursor.y === _lastCursorY) return
     _lastCursorX = cursor.x; _lastCursorY = cursor.y
     const b = overlayWindow.getBounds()
-    overlayWindow.webContents.send('cursor-pos', {
-      x: cursor.x, y: cursor.y,
-      cx: b.x + 42, cy: b.y + 42   // centro del botón dentro de la ventana 84px
-    })
-  }, 100) // 10fps es suficiente para detección de proximidad, menos IPC acumulado
+    const cx = b.x + 42, cy = b.y + 42
+    const dx = cursor.x - cx, dy = cursor.y - cy
+    const inRange = (dx * dx + dy * dy) < 250 * 250  // solo dentro de 250px
+    if (inRange) {
+      _cursorWasInRange = true
+      overlayWindow.webContents.send('cursor-pos', { x: cursor.x, y: cursor.y, cx, cy })
+    } else if (_cursorWasInRange) {
+      _cursorWasInRange = false
+      overlayWindow.webContents.send('cursor-pos', { x: cx, y: cy, cx, cy }) // centra la pupila
+    }
+  }, 100)
 }
 
 // ─── Ventana de voz (oculta, focusable) ──────────────────────────────────────
