@@ -110,7 +110,8 @@ async function spotifyApi(token, method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 204) return null
-  const data = await res.json()
+  let data
+  try { data = await res.json() } catch { throw new Error(`Spotify ${res.status}`) }
   if (!res.ok) throw new Error(data.error?.message || `Spotify ${res.status}`)
   return data
 }
@@ -145,7 +146,7 @@ function isMusicCommand(text) {
 function parseSimple(text) {
   const t = text.toLowerCase()
   if (/\b(siguiente|skip|next|pr[oó]xim)\b/.test(t))                                      return { action: 'next' }
-  if (/\b(anterior|atr[aá]s|prev(ious)?|volver|retroceder)\b/.test(t))                    return { action: 'previous' }
+  if (/\b(anterior|atr[aá]s|prev(ious)?|volver(?![a-záéíóúüñ])|retroceder)\b/i.test(t))  return { action: 'previous' }
   if (/\b(pausa[r]?|pausá|detener)\b/.test(t) && !/\bpon[eé]?m?\b/.test(t))              return { action: 'pause' }
   if (/\b(reanudar|continuar|resume|seguir)\b/.test(t) && !/\bpon[eé]?m?\b/.test(t))     return { action: 'resume' }
   if (/qu[eé]\s+(canci[oó]n|suena|est[aá]\s+sonando|toca|canta)/.test(t))                return { action: 'current' }
