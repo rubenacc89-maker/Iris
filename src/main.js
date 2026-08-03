@@ -1040,12 +1040,12 @@ ipcMain.handle('send-message', async (_, { message }) => {
       .catch(() => {})
   }
 
-  // Detectar juego actual desde memoria actualizada
+  // Detectar juego actual — proceso detectado tiene prioridad sobre memoria en disco
   const updatedMem = getRawMemory(userId)
   const gameEntries = Object.entries(updatedMem || {}).filter(([name]) =>
     name && name.toLowerCase() !== 'null' && name.toLowerCase() !== 'unknown'
   ).sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
-  const currentGame = gameEntries[0]?.[0] || null
+  const currentGame = _processGame || gameEntries[0]?.[0] || null
 
   // Auto-título del chat
   if (currentGame && (chat.title === 'Nueva conversación' || !chat.game)) {
@@ -1222,7 +1222,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   const gameEntries  = Object.entries(updatedMem || {})
     .filter(([n]) => n && n.toLowerCase() !== 'null' && n.toLowerCase() !== 'unknown')
     .sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
-  const currentGame  = gameEntries[0]?.[0] || null
+  const currentGame  = _processGame || gameEntries[0]?.[0] || null
 
   if (currentGame && (chat.title === 'Nueva conversación' || !chat.game)) {
     chat.title = currentGame; chat.game = currentGame
