@@ -230,34 +230,57 @@ async function handleMusicCommand(message, store, userId) {
     switch (intent.action) {
       case 'play_artist': {
         const artistName = intent.artist_name || intent.query
-        const q1 = intent.artist_name ? `artist:"${intent.artist_name}"` : artistName
-        let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q1)}&type=artist&limit=1`)
-        let artist = r.artists?.items?.[0]
-        if (!artist && intent.artist_name) {
-          const r2 = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`)
-          artist = r2.artists?.items?.[0]
+        const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+        const queries = [
+          `artist:"${artistName}"`,
+          `artist:"${norm(artistName)}"`,
+          artistName,
+        ]
+        let artist = null
+        for (const q of queries) {
+          const r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=artist&limit=1`)
+          artist = r.artists?.items?.[0]
+          if (artist) break
         }
         if (!artist) return { text: `No encontré al artista "${artistName}" en Spotify.`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
         return { text: `Poniendo ${artist.name} 🎵`, silent: true }
       }
       case 'play_track': {
-        const trackName = intent.track_name || intent.query
-        let q
-        if (intent.track_name && intent.artist_name) {
-          q = `track:"${intent.track_name}" artist:"${intent.artist_name}"`
-        } else if (intent.track_name) {
-          q = `track:"${intent.track_name}"`
-        } else {
-          q = intent.query || ''
+        const trackName  = intent.track_name || intent.query
+        const artistName = intent.artist_name || ''
+        const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+        // Cascada de búsqueda: del más estricto al más permisivo
+        const queries = []
+        if (trackName && artistName) {
+          queries.push(`track:"${trackName}" artist:"${artistName}"`)             // 1. filtros exactos con acentos
+          queries.push(`track:"${norm(trackName)}" artist:"${norm(artistName)}"`) // 2. filtros sin acentos
+          queries.push(`${trackName} ${artistName}`)                              // 3. texto libre con acentos
+          queries.push(`${norm(trackName)} ${norm(artistName)}`)                  // 4. texto libre sin acentos
+        } else if (trackName) {
+          queries.push(`track:"${trackName}"`)
+          queries.push(`track:"${norm(trackName)}"`)
+          queries.push(trackName)
         }
-        let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=1`)
-        let track = r.tracks?.items?.[0]
-        if (!track && (intent.track_name || intent.artist_name)) {
-          const freeQ = [intent.track_name, intent.artist_name].filter(Boolean).join(' ')
-          const r2    = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(freeQ)}&type=track&limit=1`)
-          track = r2.tracks?.items?.[0]
+
+        let track = null
+        for (const q of queries) {
+          const r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=1`)
+          track = r.tracks?.items?.[0]
+          if (track) { console.log('[SPOTIFY] Track encontrado con query:', q); break }
         }
+
+        // Último fallback: poner al artista si no encontró la canción
+        if (!track && artistName) {
+          const ra     = await spotifyApi(token, 'GET', `/search?q=artist:"${norm(artistName)}"&type=artist&limit=1`)
+          const artist = ra.artists?.items?.[0]
+          if (artist) {
+            await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
+            return { text: `No encontré "${trackName}" exactamente — poniendo ${artist.name} 🎵`, silent: true }
+          }
+        }
+
         if (!track) return { text: `No encontré "${trackName}" en Spotify.`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { uris: [track.uri] })
         return { text: `Sonando: "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵`, silent: true }
