@@ -31,7 +31,11 @@ async function transcribeAudio(audioBase64) {
     const result = await getGroq().audio.transcriptions.create({
       file: fs.createReadStream(tmpPath),
       model: 'whisper-large-v3-turbo',
-      response_format: 'json'
+      response_format: 'json',
+      language: 'es',
+      // Sesga la transcripción hacia nombres de artistas y canciones comunes
+      // para evitar errores fonéticos como "Bakboni" en lugar de "Bad Bunny"
+      prompt: 'Bad Bunny, Daddy Yankee, J Balvin, Maluma, Ozuna, Anuel AA, Karol G, RKM & Ken-Y, Don Omar, Nicky Jam, Farruko, Rauw Alejandro, Myke Towers, Jhay Cortez, Sech, Bizarrap, Shakira, Marc Anthony, Romeo Santos, Aventura, Drake, Eminem, Taylor Swift, The Weeknd, Post Malone, Imagine Dragons, Coldplay, Spotify, playlist, reggaeton, trap, salsa, bachata, cumbia'
     })
     const text = result.text?.trim() || ''
     console.log('[VOZ] Transcripción Whisper:', text)

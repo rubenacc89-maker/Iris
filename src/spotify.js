@@ -175,20 +175,32 @@ async function parseMusicIntent(text) {
 {"action":"play_track|play_artist|play_genre|play_playlist|volume_up|volume_down|volume_set|shuffle|unknown","track_name":"nombre exacto de la canción o vacío","artist_name":"nombre exacto del artista o vacío","query":"texto para género o playlist","volume":número_0_100}
 
 REGLAS CRÍTICAS:
-- El usuario puede cometer typos. Inferí la intención aunque haya errores de tipeo obvios ("reporduce" = reproduce, "escucahr" = escuchar, "paly" = play).
-- Corregí los nombres de artistas y canciones a su ortografía oficial real antes de devolverlos (ej: "rakin" → "Rakim", "ke y" → "Ken-Y", "bad buni" → "Bad Bunny", "dady yankee" → "Daddy Yankee").
-- Si solo mencionan artista → action:play_artist, completá artist_name
-- Si mencionan canción Y artista → action:play_track, completá ambos
-- Si piden género/mood → action:play_genre, completá query
-- Si piden playlist → action:play_playlist, completá query
-- Nombres propios: ortografía oficial, sin traducir
+- El texto puede venir de reconocimiento de voz (STT) con errores fonéticos o de tipeo. Inferí la intención real.
+- CORRECCIÓN FONÉTICA: el usuario habla en español y dicta nombres en inglés/spanglish. Corregí transcripciones fonéticas al nombre oficial (ejemplos abajo).
+- CORRECCIÓN DE TYPOS: corregí errores de escritura antes de extraer los nombres ("reporduce" = reproduce, "dady yankee" = "Daddy Yankee").
+- Siempre devolvé el nombre oficial del artista/canción con su ortografía correcta.
+- Si solo mencionan artista → action:play_artist
+- Si mencionan canción Y artista → action:play_track
+- Si piden género/mood → action:play_genre
+- Si piden playlist → action:play_playlist
+
+Ejemplos FONÉTICOS (voz con pronunciación española):
+"Bakboni" o "Backbonnet" o "Back Booney" → artista: "Bad Bunny"
+"Dadi Yanki" o "Dady Yenqui" → artista: "Daddy Yankee"
+"Ei Balbin" o "Jay Balwin" → artista: "J Balvin"
+"Malouma" o "Malumba" → artista: "Maluma"
+"Ozuna" → artista: "Ozuna" (sin cambio)
+"Rau Alejandro" o "Raw Alejandro" → artista: "Rauw Alejandro"
+"rakin y ke Y" o "rkm y ken y" → artista: "RKM & Ken-Y"
+"anuel" o "anuel a a" → artista: "Anuel AA"
+"karol yi" o "carol g" → artista: "Karol G"
 
 Ejemplos con typos:
 "reporduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
-"down de rakin y ke y" → {"action":"play_track","track_name":"Down","artist_name":"Rakim y Ken-Y","query":"","volume":0}
+"down de rakin y ke y" → {"action":"play_track","track_name":"Down","artist_name":"RKM & Ken-Y","query":"","volume":0}
 "pone don omar" → {"action":"play_artist","track_name":"","artist_name":"Don Omar","query":"","volume":0}
 "Gazolina de dady yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
-"bad buni" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce Bakboni" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
 "poneme regueton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
 "mi playtlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
 "volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}
