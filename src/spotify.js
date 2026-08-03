@@ -165,47 +165,44 @@ async function parseMusicIntent(text) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 120,
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 150,
         temperature: 0,
         messages: [
           {
             role: 'system',
-            content: `Extraé entidades de música del comando. SOLO JSON sin markdown ni texto extra:
-{"action":"play_track|play_artist|play_genre|play_playlist|volume_up|volume_down|volume_set|shuffle|unknown","track_name":"nombre exacto de la canción o vacío","artist_name":"nombre exacto del artista o vacío","query":"texto para género o playlist","volume":número_0_100}
+            content: `Sos un extractor de entidades musicales. El texto viene de reconocimiento de voz (STT) en español con posibles errores fonéticos o de tipeo. SOLO respondé con JSON válido sin markdown:
+{"action":"play_track|play_artist|play_genre|play_playlist|volume_up|volume_down|volume_set|shuffle|unknown","track_name":"nombre de la canción corregido","artist_name":"nombre del artista corregido","query":"para género o playlist","volume":0}
 
-REGLAS CRÍTICAS:
-- El texto puede venir de reconocimiento de voz (STT) con errores fonéticos o de tipeo. Inferí la intención real.
-- CORRECCIÓN FONÉTICA: el usuario habla en español y dicta nombres en inglés/spanglish. Corregí transcripciones fonéticas al nombre oficial (ejemplos abajo).
-- CORRECCIÓN DE TYPOS: corregí errores de escritura antes de extraer los nombres ("reporduce" = reproduce, "dady yankee" = "Daddy Yankee").
-- Siempre devolvé el nombre oficial del artista/canción con su ortografía correcta.
-- Si solo mencionan artista → action:play_artist
-- Si mencionan canción Y artista → action:play_track
-- Si piden género/mood → action:play_genre
-- Si piden playlist → action:play_playlist
+PATRÓN PRINCIPAL — español: "[verbo] [canción] de [artista]"
+Cuando el usuario dice "[comando] X de Y", X es la CANCIÓN y Y es el ARTISTA → action:play_track con ambos campos.
+Si solo dicen artista sin canción → action:play_artist.
 
-Ejemplos FONÉTICOS (voz con pronunciación española):
-"Bakboni" o "Backbonnet" o "Back Booney" → artista: "Bad Bunny"
-"Dadi Yanki" o "Dady Yenqui" → artista: "Daddy Yankee"
-"Ei Balbin" o "Jay Balwin" → artista: "J Balvin"
-"Malouma" o "Malumba" → artista: "Maluma"
-"Ozuna" → artista: "Ozuna" (sin cambio)
-"Rau Alejandro" o "Raw Alejandro" → artista: "Rauw Alejandro"
-"rakin y ke Y" o "rkm y ken y" → artista: "RKM & Ken-Y"
-"anuel" o "anuel a a" → artista: "Anuel AA"
-"karol yi" o "carol g" → artista: "Karol G"
+CORRECCIÓN FONÉTICA (STT español pronunciando nombres en inglés):
+"Bac Bunny", "Bac Boney", "Bacbonny", "Backbone", "Back Booney" → "Bad Bunny"
+"Dadi Yanki", "Dady Yenqui", "Dady Yankee" → "Daddy Yankee"
+"Arcangel", "Arc Ángel", "Arcángel" → "Arcángel"
+"rakin y ke y", "rkm y ken y", "rakin y ke Y" → "RKM & Ken-Y"
+"Rau Alejandro", "Raw Alejandro" → "Rauw Alejandro"
+"Anuel a a", "Anuel AA" → "Anuel AA"
+"Karol yi", "Carol G", "Carol Ji" → "Karol G"
 
-Ejemplos con typos:
-"reporduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
+CORRECCIÓN DE CANCIÓN (reconstruí el título aunque esté garbled):
+"tu no vives asi", "tú no vívig así", "tú no vives así", "tu no vib así" → "Tú No Vives Así"
+"tu novio así" → puede ser "Tú No Vives Así" si hay artista reggaeton/trap
+Usá el contexto del artista para deducir la canción cuando el STT la distorsiona.
+
+EJEMPLOS:
+"reproduce tú no vives así de Bad Bunny" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce tu no vívig así de Bac Bunny" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce tu novio así de Bac Boney y Arcángel" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
+"Gasolina de Daddy Yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
 "down de rakin y ke y" → {"action":"play_track","track_name":"Down","artist_name":"RKM & Ken-Y","query":"","volume":0}
-"pone don omar" → {"action":"play_artist","track_name":"","artist_name":"Don Omar","query":"","volume":0}
-"Gazolina de dady yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
-"reproduce Bakboni" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
-"poneme regueton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
-"mi playtlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
-"volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}
-"subí el volumen" → {"action":"volume_up","track_name":"","artist_name":"","query":"","volume":0}
-"Shape of You" → {"action":"play_track","track_name":"Shape of You","artist_name":"","query":"","volume":0}`
+"reproduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
+"reproduce Bad Bunny" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
+"poneme reggaeton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
+"mi playlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
+"volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}`
           },
           { role: 'user', content: text }
         ]
