@@ -6,6 +6,10 @@ const Store = require('electron-store')
 
 const store = new Store()
 
+// ─── Feature flag Spotify ─────────────────────────────────────────────────────
+// Cambiar a true cuando tengamos Extended Quota aprobado por Spotify
+const SPOTIFY_ENABLED = false
+
 // Detecta si el usuario está pidiendo explícitamente guardar un recuerdo
 function esComandoDeMemoria(texto) {
   return /recuerda\s+que|recuerda\s+esto|guarda\s+que|anotá\s+que|anota\s+que|acordate\s+que|no\s+olvides\s+que|tené\s+en\s+cuenta\s+que|remember\s+that|remember\s+this/i.test(texto)
@@ -951,7 +955,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
   const recentHistory = chat.messages.slice(-10)
 
   // Interceptar comandos de Spotify antes de ir a la IA de gaming
-  {
+  if (SPOTIFY_ENABLED) {
     const { isMusicCommand, handleMusicCommand } = require('./spotify')
     if (isMusicCommand(message)) {
       const musicResult = await handleMusicCommand(message, store, userId)
@@ -1143,7 +1147,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   const recentHistory = chat.messages.slice(-10)
 
   // Interceptar comandos de Spotify antes de ir a la IA de gaming
-  {
+  if (SPOTIFY_ENABLED) {
     const { isMusicCommand, handleMusicCommand } = require('./spotify')
     if (isMusicCommand(message)) {
       const musicResult = await handleMusicCommand(message, store, userId)
@@ -1164,6 +1168,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   }
 
   // 2. Clasificar y obtener contexto vectorial
+
   const necesitaVision = await detectarNecesidadVisual(message)
   let screenshotBase64 = null
   if (necesitaVision) {
