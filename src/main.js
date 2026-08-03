@@ -939,16 +939,24 @@ ipcMain.handle('take-screenshot', async () => {
 ipcMain.handle('send-message', async (_, { message }) => {
   const { askGemini, detectarNecesidadVisual } = require('./gemini')
   const { getMemory, saveMemory, getRawMemory, detectGameFromText } = require('./memory')
+  const { detectRunningGame } = require('./gameDetector')
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
 
-  // Detectar juego por alias e intentar reusar la sesión de hoy para ese juego
-  const _quickGame = detectGameFromText(message)
-  if (_quickGame) {
-    if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
-    else memory[_quickGame].lastPlayed = Date.now()
-    switchToGameSession(userId, _quickGame)
+  // Detectar juego: proceso activo tiene prioridad sobre texto (evita confusión entre juegos)
+  const _processGame = detectRunningGame()
+  if (_processGame) {
+    if (!memory[_processGame]) memory[_processGame] = { notes: [], lastPlayed: Date.now() }
+    else memory[_processGame].lastPlayed = Date.now()
+    switchToGameSession(userId, _processGame)
+  } else {
+    const _quickGame = detectGameFromText(message)
+    if (_quickGame) {
+      if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
+      else memory[_quickGame].lastPlayed = Date.now()
+      switchToGameSession(userId, _quickGame)
+    }
   }
 
   const chat = getOrCreateActiveChat(userId)
@@ -1121,6 +1129,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   const { askGemini, detectarNecesidadVisual }        = require('./gemini')
   const { getMemory, saveMemory, getRawMemory, detectGameFromText } = require('./memory')
   const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
+  const { detectRunningGame } = require('./gameDetector')
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
@@ -1135,12 +1144,19 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   }
   if (!message) return { error: 'No detecté ninguna pregunta' }
 
-  // Detectar juego por alias e intentar reusar la sesión de hoy para ese juego
-  const _quickGame = detectGameFromText(message)
-  if (_quickGame) {
-    if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
-    else memory[_quickGame].lastPlayed = Date.now()
-    switchToGameSession(userId, _quickGame)
+  // Detectar juego: proceso activo tiene prioridad sobre texto (evita confusión entre juegos)
+  const _processGame = detectRunningGame()
+  if (_processGame) {
+    if (!memory[_processGame]) memory[_processGame] = { notes: [], lastPlayed: Date.now() }
+    else memory[_processGame].lastPlayed = Date.now()
+    switchToGameSession(userId, _processGame)
+  } else {
+    const _quickGame = detectGameFromText(message)
+    if (_quickGame) {
+      if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
+      else memory[_quickGame].lastPlayed = Date.now()
+      switchToGameSession(userId, _quickGame)
+    }
   }
 
   const chat = getOrCreateActiveChat(userId)
