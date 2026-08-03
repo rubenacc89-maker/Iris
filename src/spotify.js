@@ -146,22 +146,30 @@ async function parseMusicIntent(text) {
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.1-8b-instant',
-        max_tokens: 80,
+        max_tokens: 120,
         temperature: 0,
         messages: [
           {
             role: 'system',
-            content: `Convertí el comando de música en JSON. Respondé SOLO con JSON sin markdown ni texto extra:
-{"action":"play_artist|play_track|play_genre|play_playlist|volume_up|volume_down|volume_set|unknown","query":"texto","volume":número_0_100}
+            content: `Extraé entidades de música del comando. SOLO JSON sin markdown ni texto extra:
+{"action":"play_track|play_artist|play_genre|play_playlist|volume_up|volume_down|volume_set|shuffle|unknown","track_name":"nombre exacto de la canción o vacío","artist_name":"nombre exacto del artista o vacío","query":"texto para género o playlist","volume":número_0_100}
+
+Reglas:
+- Si mencionan canción Y artista → action:play_track, completá track_name y artist_name
+- Si solo mencionan artista → action:play_artist, completá artist_name
+- Si piden género/mood → action:play_genre, completá query
+- Si piden playlist → action:play_playlist, completá query
+- Usá siempre los nombres propios exactos, sin traducir
+
 Ejemplos:
-"poné Bad Bunny" → {"action":"play_artist","query":"Bad Bunny"}
-"pon Shape of You" → {"action":"play_track","query":"Shape of You"}
-"poneme reggaeton" → {"action":"play_genre","query":"reggaeton"}
-"mi playlist de gaming" → {"action":"play_playlist","query":"gaming"}
-"playlist de concentración" → {"action":"play_playlist","query":"concentración"}
-"volumen al 60" → {"action":"volume_set","query":"","volume":60}
-"subí el volumen" → {"action":"volume_up","query":""}
-"bajá el volumen" → {"action":"volume_down","query":""}`
+"reproduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
+"pon Don Omar" → {"action":"play_artist","track_name":"","artist_name":"Don Omar","query":"","volume":0}
+"Gasolina de Daddy Yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
+"poneme reggaeton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
+"mi playlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
+"volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}
+"subí el volumen" → {"action":"volume_up","track_name":"","artist_name":"","query":"","volume":0}
+"Shape of You" → {"action":"play_track","track_name":"Shape of You","artist_name":"","query":"","volume":0}`
           },
           { role: 'user', content: text }
         ]
@@ -188,18 +196,42 @@ async function handleMusicCommand(message, store, userId) {
   try {
     switch (intent.action) {
       case 'play_artist': {
-        const r      = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=artist&limit=1`)
-        const artist = r.artists?.items?.[0]
-        if (!artist) return { text: `No encontré al artista "${intent.query}" en Spotify.` }
+        const artistName = intent.artist_name || intent.query
+        // Búsqueda por filtro estricto primero, luego fallback texto libre
+        const q1 = intent.artist_name ? `artist:"${intent.artist_name}"` : artistName
+        let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q1)}&type=artist&limit=1`)
+        let artist = r.artists?.items?.[0]
+        if (!artist && intent.artist_name) {
+          const r2 = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`)
+          artist = r2.artists?.items?.[0]
+        }
+        if (!artist) return { text: `No encontré al artista "${artistName}" en Spotify.` }
         await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
         return { text: `Poniendo ${artist.name} 🎵` }
       }
       case 'play_track': {
-        const r     = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=track&limit=1`)
-        const track = r.tracks?.items?.[0]
-        if (!track) return { text: `No encontré "${intent.query}" en Spotify.` }
+        const trackName  = intent.track_name  || intent.query
+        const artistName = intent.artist_name || ''
+        // Query con filtros estrictos de Spotify
+        let q
+        if (intent.track_name && intent.artist_name) {
+          q = `track:"${intent.track_name}" artist:"${intent.artist_name}"`
+        } else if (intent.track_name) {
+          q = `track:"${intent.track_name}"`
+        } else {
+          q = intent.query || ''
+        }
+        let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=1`)
+        let track = r.tracks?.items?.[0]
+        // Fallback: búsqueda texto libre si el filtro no dio resultados
+        if (!track && (intent.track_name || intent.artist_name)) {
+          const freeQ = [intent.track_name, intent.artist_name].filter(Boolean).join(' ')
+          const r2    = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(freeQ)}&type=track&limit=1`)
+          track = r2.tracks?.items?.[0]
+        }
+        if (!track) return { text: `No encontré "${trackName}" en Spotify.` }
         await spotifyApi(token, 'PUT', '/me/player/play', { uris: [track.uri] })
-        return { text: `Poniendo "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵` }
+        return { text: `Sonando: "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵` }
       }
       case 'play_genre': {
         const r  = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=playlist&limit=3`)
