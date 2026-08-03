@@ -188,14 +188,15 @@ CORRECCIÓN FONÉTICA (STT español pronunciando nombres en inglés):
 "Karol yi", "Carol G", "Carol Ji" → "Karol G"
 
 CORRECCIÓN DE CANCIÓN (reconstruí el título aunque esté garbled):
-"tu no vives asi", "tú no vívig así", "tú no vives así", "tu no vib así" → "Tú No Vives Así"
-"tu novio así" → puede ser "Tú No Vives Así" si hay artista reggaeton/trap
+"tu no vives asi", "tú no vívig así", "tú no vives así", "tu no vib así" → "Tu No Vive Así" (canción de Arcángel ft. Bad Bunny — el título real es "Vive" sin s)
+"tu novio así" → puede ser "Tu No Vive Así" si hay artista reggaeton/trap
 Usá el contexto del artista para deducir la canción cuando el STT la distorsiona.
+IMPORTANTE: priorizá el título real de la canción sobre lo que dijo el usuario literalmente.
 
 EJEMPLOS:
-"reproduce tú no vives así de Bad Bunny" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
-"reproduce tu no vívig así de Bac Bunny" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
-"reproduce tu novio así de Bac Boney y Arcángel" → {"action":"play_track","track_name":"Tú No Vives Así","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce tú no vives así de Bad Bunny" → {"action":"play_track","track_name":"Tu No Vive Así","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce tu no vívig así de Bac Bunny" → {"action":"play_track","track_name":"Tu No Vive Así","artist_name":"Bad Bunny","query":"","volume":0}
+"reproduce tu novio así de Bac Boney y Arcángel" → {"action":"play_track","track_name":"Tu No Vive Así","artist_name":"Arcángel","query":"","volume":0}
 "Gasolina de Daddy Yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
 "down de rakin y ke y" → {"action":"play_track","track_name":"Down","artist_name":"RKM & Ken-Y","query":"","volume":0}
 "reproduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
@@ -214,6 +215,17 @@ EJEMPLOS:
   } catch {
     return { action: 'unknown' }
   }
+}
+
+// Similaridad entre dos títulos de canción (0-1). Ignora acentos, mayúsculas y puntuación.
+function titleSimilarity(a, b) {
+  const clean = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').trim()
+  const ca = clean(a), cb = clean(b)
+  if (ca === cb) return 1
+  if (ca.includes(cb) || cb.includes(ca)) return 0.9
+  const wa = ca.split(/\s+/), wb = cb.split(/\s+/)
+  const overlap = wa.filter(w => wb.includes(w)).length
+  return (2 * overlap) / (wa.length + wb.length)
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -265,10 +277,27 @@ async function handleMusicCommand(message, store, userId) {
         }
 
         let track = null
-        for (const q of queries) {
-          const r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=1`)
-          track = r.tracks?.items?.[0]
-          if (track) { console.log('[SPOTIFY] Track encontrado con query:', q); break }
+        for (let qi = 0; qi < queries.length; qi++) {
+          const q     = queries[qi]
+          // Queries 0-1 son filtros estrictos → 1 resultado alcanza
+          // Queries 2+ son texto libre → traemos 5 y elegimos el más similar al título pedido
+          const limit = qi >= 2 ? 5 : 1
+          const r     = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=${limit}`)
+          const items = r.tracks?.items || []
+          if (!items.length) continue
+
+          if (qi >= 2 && trackName && items.length > 1) {
+            let best = items[0], bestScore = titleSimilarity(items[0].name, trackName)
+            for (const item of items.slice(1)) {
+              const score = titleSimilarity(item.name, trackName)
+              if (score > bestScore) { best = item; bestScore = score }
+            }
+            track = best
+          } else {
+            track = items[0]
+          }
+
+          if (track) { console.log('[SPOTIFY] Track encontrado con query:', q, '→', track.name); break }
         }
 
         // Último fallback: poner al artista si no encontró la canción
