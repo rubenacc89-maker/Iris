@@ -250,13 +250,19 @@ async function handleMusicCommand(message, store, userId) {
 
   try {
     // Un solo GET /me/player nos da: dispositivo activo + volumen actual.
-    // Si no hay dispositivo activo, buscamos en /me/player/devices para
-    // poder activar Spotify aunque no esté reproduciendo nada todavía.
+    // Si no hay dispositivo activo, buscamos en /me/player/devices y
+    // transferimos el control a ese dispositivo para "despertarlo" — así
+    // Spotify acepta comandos aunque no haya reproducido nada todavía.
     const playerState = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
     let deviceId = playerState?.device?.id ?? null
     if (!deviceId) {
       const devs = await spotifyApi(token, 'GET', '/me/player/devices').catch(() => null)
       deviceId = devs?.devices?.[0]?.id ?? null
+      if (deviceId) {
+        // Transferir el control al dispositivo sin iniciar reproducción
+        await spotifyApi(token, 'PUT', '/me/player', { device_ids: [deviceId] }).catch(() => null)
+        await new Promise(r => setTimeout(r, 500))
+      }
     }
 
     // Helper para armar el body de play con device_id cuando está disponible
