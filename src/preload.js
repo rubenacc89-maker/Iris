@@ -19,6 +19,7 @@ const INVOKE_CHANNELS = [
   'take-screenshot',
   'quit-app',
   'spotify-status', 'spotify-connect', 'spotify-disconnect',
+  'get-current-game',
 ]
 
 const RECEIVE_CHANNELS = [

@@ -1535,9 +1535,15 @@
       })
     }
 
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
       loadHeaderProfile()
       loadHistory()
+      // Mostrar el juego activo al abrir el panel
+      const game = await window.api.invoke('get-current-game').catch(() => null)
+      if (game) {
+        document.getElementById('game-label').textContent = `Juego: ${game}`
+        checkGameTip(game)
+      }
     })
 
     window.api.on('show-tab', (tab) => switchTab(tab))

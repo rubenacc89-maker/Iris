@@ -701,6 +701,16 @@ ipcMain.on('context-close', () => {
   contextMenuWindow?.close()
 })
 
+ipcMain.handle('get-current-game', () => {
+  const { detectRunningGame } = require('./gameDetector')
+  const processGame = detectRunningGame()
+  if (processGame) return processGame
+  // Fallback: juego del chat activo guardado en store
+  const userId = getActiveUserId()
+  const chat   = getOrCreateActiveChat(userId)
+  return chat?.game || null
+})
+
 ipcMain.handle('spotify-status', async () => {
   const { getValidToken } = require('./spotify')
   const userId = getActiveUserId()
