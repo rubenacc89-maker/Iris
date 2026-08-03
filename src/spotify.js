@@ -118,8 +118,28 @@ async function spotifyApi(token, method, path, body) {
 // ─── Intent detection & parsing ───────────────────────────────────────────────
 const MUSIC_RE = /\b(m[uú]sica|canci[oó]n|playlist|spotify|pon[eé]?m?e?|reproduc\w*|siguiente|pr[oó]xim[ao]|anterior|atr[aá]s|pausar?|pausá|reanudar|continuar|volumen|[aá]lbum|escucha[r]?|toca[r]?|shuffle|aleatori|qu[eé]\s+(suena|canta|toca|est[aá]))\b/i
 
+// Verbos de música que pueden ser mal escritos — mínimo 5 chars para evitar falsos positivos
+const MUSIC_VERBS = ['reproduce', 'reproducir', 'reproduciendo', 'playlist', 'escuchar', 'escucha', 'siguiente', 'anterior', 'spotify', 'musica', 'cancion', 'volumen', 'pausa', 'aleatorio', 'shuffle']
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i])
+  for (let j = 1; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+    }
+  }
+  return dp[m][n]
+}
+
 function isMusicCommand(text) {
-  return MUSIC_RE.test(text)
+  if (MUSIC_RE.test(text)) return true
+  // Fuzzy: cualquier palabra de 5+ chars con distancia ≤2 a un verbo musical conocido
+  const words = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/)
+  return words.some(w => w.length >= 5 && MUSIC_VERBS.some(v => levenshtein(w, v) <= 2))
 }
 
 function parseSimple(text) {
@@ -154,19 +174,23 @@ async function parseMusicIntent(text) {
             content: `Extraé entidades de música del comando. SOLO JSON sin markdown ni texto extra:
 {"action":"play_track|play_artist|play_genre|play_playlist|volume_up|volume_down|volume_set|shuffle|unknown","track_name":"nombre exacto de la canción o vacío","artist_name":"nombre exacto del artista o vacío","query":"texto para género o playlist","volume":número_0_100}
 
-Reglas:
-- Si mencionan canción Y artista → action:play_track, completá track_name y artist_name
+REGLAS CRÍTICAS:
+- El usuario puede cometer typos. Inferí la intención aunque haya errores de tipeo obvios ("reporduce" = reproduce, "escucahr" = escuchar, "paly" = play).
+- Corregí los nombres de artistas y canciones a su ortografía oficial real antes de devolverlos (ej: "rakin" → "Rakim", "ke y" → "Ken-Y", "bad buni" → "Bad Bunny", "dady yankee" → "Daddy Yankee").
 - Si solo mencionan artista → action:play_artist, completá artist_name
+- Si mencionan canción Y artista → action:play_track, completá ambos
 - Si piden género/mood → action:play_genre, completá query
 - Si piden playlist → action:play_playlist, completá query
-- Usá siempre los nombres propios exactos, sin traducir
+- Nombres propios: ortografía oficial, sin traducir
 
-Ejemplos:
-"reproduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
-"pon Don Omar" → {"action":"play_artist","track_name":"","artist_name":"Don Omar","query":"","volume":0}
-"Gasolina de Daddy Yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
-"poneme reggaeton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
-"mi playlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
+Ejemplos con typos:
+"reporduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
+"down de rakin y ke y" → {"action":"play_track","track_name":"Down","artist_name":"Rakim y Ken-Y","query":"","volume":0}
+"pone don omar" → {"action":"play_artist","track_name":"","artist_name":"Don Omar","query":"","volume":0}
+"Gazolina de dady yankee" → {"action":"play_track","track_name":"Gasolina","artist_name":"Daddy Yankee","query":"","volume":0}
+"bad buni" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
+"poneme regueton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
+"mi playtlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
 "volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}
 "subí el volumen" → {"action":"volume_up","track_name":"","artist_name":"","query":"","volume":0}
 "Shape of You" → {"action":"play_track","track_name":"Shape of You","artist_name":"","query":"","volume":0}`
