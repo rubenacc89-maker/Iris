@@ -966,7 +966,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
         const meta  = { id: chat.id, title: chat.title, game: chat.game, createdAt: chat.createdAt, updatedAt: ts, messageCount: chat.messages.length, preview: musicResult.text.slice(0, 80) }
         if (idx >= 0) chats[idx] = meta; else chats.unshift(meta)
         store.set(`chats_${userId}`, chats)
-        return { response: musicResult.text, currentGame: chat.game || null, visionUsed: false }
+        return { response: musicResult.text, currentGame: chat.game || null, visionUsed: false, silent: musicResult.silent ?? false }
       }
     }
   }
@@ -1158,7 +1158,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
         const meta  = { id: chat.id, title: chat.title, game: chat.game, createdAt: chat.createdAt, updatedAt: ts, messageCount: chat.messages.length, preview: musicResult.text.slice(0, 80) }
         if (idx >= 0) chats[idx] = meta; else chats.unshift(meta)
         store.set(`chats_${userId}`, chats)
-        return { response: musicResult.text, transcription: message, currentGame: chat.game || null, visionUsed: false }
+        return { response: musicResult.text, transcription: message, currentGame: chat.game || null, visionUsed: false, silent: musicResult.silent ?? false }
       }
     }
   }

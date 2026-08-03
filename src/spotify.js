@@ -223,7 +223,7 @@ Ejemplos con typos:
 async function handleMusicCommand(message, store, userId) {
   const token = await getValidToken(store, userId)
   if (!token) {
-    return { text: 'Primero conectá Spotify desde ⚙ Config → "Conectar Spotify" 🎵' }
+    return { text: 'Primero conectá Spotify desde ⚙ Config → "Conectar Spotify" 🎵', silent: false }
   }
 
   const intent = await parseMusicIntent(message)
@@ -233,7 +233,6 @@ async function handleMusicCommand(message, store, userId) {
     switch (intent.action) {
       case 'play_artist': {
         const artistName = intent.artist_name || intent.query
-        // Búsqueda por filtro estricto primero, luego fallback texto libre
         const q1 = intent.artist_name ? `artist:"${intent.artist_name}"` : artistName
         let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q1)}&type=artist&limit=1`)
         let artist = r.artists?.items?.[0]
@@ -241,14 +240,12 @@ async function handleMusicCommand(message, store, userId) {
           const r2 = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`)
           artist = r2.artists?.items?.[0]
         }
-        if (!artist) return { text: `No encontré al artista "${artistName}" en Spotify.` }
+        if (!artist) return { text: `No encontré al artista "${artistName}" en Spotify.`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
-        return { text: `Poniendo ${artist.name} 🎵` }
+        return { text: `Poniendo ${artist.name} 🎵`, silent: true }
       }
       case 'play_track': {
-        const trackName  = intent.track_name  || intent.query
-        const artistName = intent.artist_name || ''
-        // Query con filtros estrictos de Spotify
+        const trackName = intent.track_name || intent.query
         let q
         if (intent.track_name && intent.artist_name) {
           q = `track:"${intent.track_name}" artist:"${intent.artist_name}"`
@@ -259,68 +256,67 @@ async function handleMusicCommand(message, store, userId) {
         }
         let r = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(q)}&type=track&limit=1`)
         let track = r.tracks?.items?.[0]
-        // Fallback: búsqueda texto libre si el filtro no dio resultados
         if (!track && (intent.track_name || intent.artist_name)) {
           const freeQ = [intent.track_name, intent.artist_name].filter(Boolean).join(' ')
           const r2    = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(freeQ)}&type=track&limit=1`)
           track = r2.tracks?.items?.[0]
         }
-        if (!track) return { text: `No encontré "${trackName}" en Spotify.` }
+        if (!track) return { text: `No encontré "${trackName}" en Spotify.`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { uris: [track.uri] })
-        return { text: `Sonando: "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵` }
+        return { text: `Sonando: "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵`, silent: true }
       }
       case 'play_genre': {
         const r  = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=playlist&limit=3`)
         const pl = r.playlists?.items?.[0]
-        if (!pl) return { text: `No encontré playlists de ${intent.query}.` }
+        if (!pl) return { text: `No encontré playlists de ${intent.query}.`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: pl.uri })
-        return { text: `Poniendo ${intent.query} 🎵` }
+        return { text: `Poniendo ${intent.query} 🎵`, silent: true }
       }
       case 'play_playlist': {
         const r     = await spotifyApi(token, 'GET', '/me/playlists?limit=50')
         const match = r.items?.find(p => p.name.toLowerCase().includes(intent.query.toLowerCase()))
-        if (!match) return { text: `No encontré ninguna playlist tuya que diga "${intent.query}". ¿Cómo se llama exactamente?` }
+        if (!match) return { text: `No encontré ninguna playlist tuya que diga "${intent.query}". ¿Cómo se llama exactamente?`, silent: false }
         await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: match.uri })
-        return { text: `Poniendo playlist "${match.name}" 🎵` }
+        return { text: `Poniendo playlist "${match.name}" 🎵`, silent: true }
       }
       case 'next':
         await spotifyApi(token, 'POST', '/me/player/next')
-        return { text: 'Siguiente ⏭' }
+        return { text: 'Siguiente ⏭', silent: true }
       case 'previous':
         await spotifyApi(token, 'POST', '/me/player/previous')
-        return { text: 'Anterior ⏮' }
+        return { text: 'Anterior ⏮', silent: true }
       case 'pause':
         await spotifyApi(token, 'PUT', '/me/player/pause')
-        return { text: 'Pausado ⏸' }
+        return { text: 'Pausado ⏸', silent: true }
       case 'resume':
         await spotifyApi(token, 'PUT', '/me/player/play')
-        return { text: 'Reproduciendo ▶' }
+        return { text: 'Reproduciendo ▶', silent: true }
       case 'volume_set': {
         const vol = Math.min(100, Math.max(0, intent.volume || 50))
         await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${vol}`)
-        return { text: `Volumen al ${vol}% 🔊` }
+        return { text: `Volumen al ${vol}% 🔊`, silent: true }
       }
       case 'volume_up': {
         const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
         const cur = pb?.device?.volume_percent ?? 50
         const nv  = Math.min(100, cur + 20)
         await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
-        return { text: `Volumen al ${nv}% 🔊` }
+        return { text: `Volumen al ${nv}% 🔊`, silent: true }
       }
       case 'volume_down': {
         const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
         const cur = pb?.device?.volume_percent ?? 50
         const nv  = Math.max(0, cur - 20)
         await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
-        return { text: `Volumen al ${nv}% 🔊` }
+        return { text: `Volumen al ${nv}% 🔊`, silent: true }
       }
       case 'shuffle':
         await spotifyApi(token, 'PUT', '/me/player/shuffle?state=true')
-        return { text: 'Modo aleatorio activado 🔀' }
+        return { text: 'Modo aleatorio activado 🔀', silent: true }
       case 'current': {
         const r = await spotifyApi(token, 'GET', '/me/player/currently-playing')
-        if (!r?.item) return { text: 'No hay nada reproduciendo en Spotify ahora.' }
-        return { text: `Suena: "${r.item.name}" — ${r.item.artists.map(a => a.name).join(', ')} 🎵` }
+        if (!r?.item) return { text: 'No hay nada reproduciendo en Spotify ahora.', silent: false }
+        return { text: `Suena: "${r.item.name}" — ${r.item.artists.map(a => a.name).join(', ')} 🎵`, silent: false }
       }
       default:
         return null // no es un comando musical claro → dejar que lo maneje la IA de gaming
@@ -328,13 +324,13 @@ async function handleMusicCommand(message, store, userId) {
   } catch (err) {
     const msg = err.message || ''
     if (msg.includes('PREMIUM_REQUIRED') || msg.toLowerCase().includes('premium')) {
-      return { text: 'El control de Spotify requiere cuenta Premium.' }
+      return { text: 'El control de Spotify requiere cuenta Premium.', silent: false }
     }
     if (msg.includes('NO_ACTIVE_DEVICE') || msg.includes('404')) {
-      return { text: 'Abrí Spotify y reproducí algo primero para activar el dispositivo.' }
+      return { text: 'Abrí Spotify y reproducí algo primero para activar el dispositivo.', silent: false }
     }
     console.error('[SPOTIFY] Error:', msg)
-    return { text: `Error con Spotify: ${msg}` }
+    return { text: `Error con Spotify: ${msg}`, silent: false }
   }
 }
 

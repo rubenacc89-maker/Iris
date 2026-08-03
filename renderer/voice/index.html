@@ -142,7 +142,7 @@
         log('[VOZ] Error IA: ' + result.error)
       } else {
         log('[VOZ] OK — transcripción: ' + result.transcription)
-        speak(result.response)
+        if (!result.silent) speak(result.response)
       }
     } catch (e) {
       log('[VOZ] Error IPC: ' + e.message)
