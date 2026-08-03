@@ -1252,6 +1252,17 @@
           <p id="shortcut-status" style="font-size:11px;color:#888"></p>
         </div>
 
+        <div class="setting-block" id="spotify-block">
+          <h3>Spotify <span style="font-size:10px;font-weight:600;background:rgba(29,185,84,0.15);color:#1DB954;border:1px solid rgba(29,185,84,0.3);border-radius:4px;padding:2px 6px;letter-spacing:0.04em">NUEVO</span></h3>
+          <p style="font-size:12px;color:var(--text2)">Controlá Spotify por voz o texto: "pon Bad Bunny", "siguiente canción", "mi playlist de gaming".</p>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <div id="spotify-dot" style="width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0"></div>
+            <span id="spotify-txt" style="font-size:12px;color:var(--text2)">Verificando...</span>
+            <button class="btn-sm" id="btn-spotify-connect" style="display:none">Conectar</button>
+            <button class="btn-sm" id="btn-spotify-disconnect" style="display:none;color:#f87171;border-color:rgba(248,113,113,0.3)">Desconectar</button>
+          </div>
+        </div>
+
         <div style="margin-top:auto;padding-top:8px;border-top:1px solid var(--border);text-align:center">
           <button style="background:none;border:none;font-size:11px;color:rgba(248,113,113,0.45);cursor:pointer;padding:4px 10px;border-radius:4px;transition:color 0.15s" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='rgba(248,113,113,0.45)'" onclick="window.api.invoke('quit-app')">Cerrar Iris</button>
         </div>
@@ -1263,6 +1274,50 @@
       document.getElementById('btn-record-shortcut').addEventListener('click', startRecordShortcut)
       document.getElementById('btn-save-shortcut').addEventListener('click', saveShortcut)
       document.getElementById('btn-cancel-shortcut').addEventListener('click', cancelRecordShortcut)
+
+      // Spotify
+      const dot        = document.getElementById('spotify-dot')
+      const txt        = document.getElementById('spotify-txt')
+      const btnConnect = document.getElementById('btn-spotify-connect')
+      const btnDisc    = document.getElementById('btn-spotify-disconnect')
+
+      const spotStatus = await window.api.invoke('spotify-status')
+      if (spotStatus.connected) {
+        dot.style.background = '#1DB954'
+        txt.textContent      = 'Conectado'
+        btnDisc.style.display = ''
+      } else {
+        dot.style.background  = '#555'
+        txt.textContent       = 'No conectado'
+        btnConnect.style.display = ''
+      }
+
+      btnConnect.addEventListener('click', async () => {
+        btnConnect.textContent = 'Conectando...'
+        btnConnect.disabled    = true
+        txt.textContent        = 'Esperando autorización en el navegador...'
+        const res = await window.api.invoke('spotify-connect')
+        if (res.ok) {
+          dot.style.background     = '#1DB954'
+          txt.textContent          = 'Conectado'
+          btnConnect.style.display = 'none'
+          btnDisc.style.display    = ''
+        } else {
+          btnConnect.textContent = 'Conectar'
+          btnConnect.disabled    = false
+          txt.textContent        = 'Error: ' + (res.error || 'intentá de nuevo')
+        }
+      })
+
+      btnDisc.addEventListener('click', async () => {
+        await window.api.invoke('spotify-disconnect')
+        dot.style.background     = '#555'
+        txt.textContent          = 'No conectado'
+        btnDisc.style.display    = 'none'
+        btnConnect.style.display = ''
+        btnConnect.textContent   = 'Conectar'
+        btnConnect.disabled      = false
+      })
 
       refreshLogs()
     }

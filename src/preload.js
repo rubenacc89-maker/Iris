@@ -18,6 +18,7 @@ const INVOKE_CHANNELS = [
   'send-feedback', 'get-app-version',
   'take-screenshot',
   'quit-app',
+  'spotify-status', 'spotify-connect', 'spotify-disconnect',
 ]
 
 const RECEIVE_CHANNELS = [

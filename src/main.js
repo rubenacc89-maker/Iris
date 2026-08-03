@@ -697,6 +697,30 @@ ipcMain.on('context-close', () => {
   contextMenuWindow?.close()
 })
 
+ipcMain.handle('spotify-status', async () => {
+  const { getValidToken } = require('./spotify')
+  const userId = getActiveUserId()
+  const token  = await getValidToken(store, userId).catch(() => null)
+  return { connected: !!token }
+})
+
+ipcMain.handle('spotify-connect', async () => {
+  const { startAuth } = require('./spotify')
+  const userId = getActiveUserId()
+  try {
+    await startAuth(store, userId)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+})
+
+ipcMain.handle('spotify-disconnect', () => {
+  const userId = getActiveUserId()
+  store.delete(`spotify_tokens_${userId}`)
+  return { ok: true }
+})
+
 ipcMain.handle('get-app-version', () => app.getVersion())
 
 ipcMain.handle('quit-app', () => {
@@ -926,6 +950,27 @@ ipcMain.handle('send-message', async (_, { message }) => {
   const chat = getOrCreateActiveChat(userId)
   const recentHistory = chat.messages.slice(-10)
 
+  // Interceptar comandos de Spotify antes de ir a la IA de gaming
+  {
+    const { isMusicCommand, handleMusicCommand } = require('./spotify')
+    if (isMusicCommand(message)) {
+      const musicResult = await handleMusicCommand(message, store, userId)
+      if (musicResult) {
+        const ts = Date.now()
+        chat.messages.push({ timestamp: ts, question: message, answer: musicResult.text, vision: false })
+        chat.updatedAt = ts
+        if (chat.messages.length > 200) chat.messages.splice(0, chat.messages.length - 200)
+        store.set(`chatmsgs_${chat.id}`, chat.messages)
+        const chats = store.get(`chats_${userId}`, [])
+        const idx   = chats.findIndex(c => c.id === chat.id)
+        const meta  = { id: chat.id, title: chat.title, game: chat.game, createdAt: chat.createdAt, updatedAt: ts, messageCount: chat.messages.length, preview: musicResult.text.slice(0, 80) }
+        if (idx >= 0) chats[idx] = meta; else chats.unshift(meta)
+        store.set(`chats_${userId}`, chats)
+        return { response: musicResult.text, currentGame: chat.game || null, visionUsed: false }
+      }
+    }
+  }
+
   // 1. Clasificar si la pregunta requiere ver la pantalla
   const necesitaVision = await detectarNecesidadVisual(message)
 
@@ -1096,6 +1141,27 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 
   const chat = getOrCreateActiveChat(userId)
   const recentHistory = chat.messages.slice(-10)
+
+  // Interceptar comandos de Spotify antes de ir a la IA de gaming
+  {
+    const { isMusicCommand, handleMusicCommand } = require('./spotify')
+    if (isMusicCommand(message)) {
+      const musicResult = await handleMusicCommand(message, store, userId)
+      if (musicResult) {
+        const ts = Date.now()
+        chat.messages.push({ timestamp: ts, question: message, answer: musicResult.text, vision: false, voice: true })
+        chat.updatedAt = ts
+        if (chat.messages.length > 200) chat.messages.splice(0, chat.messages.length - 200)
+        store.set(`chatmsgs_${chat.id}`, chat.messages)
+        const chats = store.get(`chats_${userId}`, [])
+        const idx   = chats.findIndex(c => c.id === chat.id)
+        const meta  = { id: chat.id, title: chat.title, game: chat.game, createdAt: chat.createdAt, updatedAt: ts, messageCount: chat.messages.length, preview: musicResult.text.slice(0, 80) }
+        if (idx >= 0) chats[idx] = meta; else chats.unshift(meta)
+        store.set(`chats_${userId}`, chats)
+        return { response: musicResult.text, transcription: message, currentGame: chat.game || null, visionUsed: false }
+      }
+    }
+  }
 
   // 2. Clasificar y obtener contexto vectorial
   const necesitaVision = await detectarNecesidadVisual(message)

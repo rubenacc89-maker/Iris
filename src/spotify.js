@@ -1,0 +1,273 @@
+const http   = require('http')
+const crypto = require('crypto')
+const { shell } = require('electron')
+
+const CLIENT_ID    = 'e608b6c0bc24431fa3411dd6a8ab63e4'
+const REDIRECT_URI = 'http://127.0.0.1:8889/spotify-callback'
+const SCOPES = [
+  'user-read-playback-state',
+  'user-modify-playback-state',
+  'user-read-currently-playing',
+  'playlist-read-private',
+  'playlist-read-collaborative',
+].join(' ')
+
+// ─── PKCE helpers ─────────────────────────────────────────────────────────────
+function genVerifier()         { return crypto.randomBytes(32).toString('base64url') }
+function genChallenge(v)       { return crypto.createHash('sha256').update(v).digest('base64url') }
+
+// ─── OAuth PKCE flow ──────────────────────────────────────────────────────────
+function startAuth(store, userId) {
+  return new Promise((resolve, reject) => {
+    const verifier  = genVerifier()
+    const challenge = genChallenge(verifier)
+    const state     = crypto.randomBytes(8).toString('hex')
+
+    const server = http.createServer(async (req, res) => {
+      const url = new URL(req.url, 'http://127.0.0.1:8889')
+      if (url.pathname !== '/spotify-callback') return
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end('<html><body style="font-family:sans-serif;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:12px"><h2 style="color:#1DB954">✓ Spotify conectado a Iris</h2><p style="color:#aaa">Podés cerrar esta ventana y volver al juego.</p></body></html>')
+      server.close()
+
+      const code          = url.searchParams.get('code')
+      const returnedState = url.searchParams.get('state')
+      if (returnedState !== state) { reject(new Error('State mismatch')); return }
+
+      try {
+        const tokens = await exchangeCode(code, verifier)
+        store.set(`spotify_tokens_${userId}`, tokens)
+        resolve(tokens)
+      } catch (e) { reject(e) }
+    })
+
+    server.on('error', reject)
+    server.listen(8889, '127.0.0.1', () => {
+      const url = new URL('https://accounts.spotify.com/authorize')
+      url.searchParams.set('client_id',             CLIENT_ID)
+      url.searchParams.set('response_type',         'code')
+      url.searchParams.set('redirect_uri',          REDIRECT_URI)
+      url.searchParams.set('scope',                 SCOPES)
+      url.searchParams.set('state',                 state)
+      url.searchParams.set('code_challenge_method', 'S256')
+      url.searchParams.set('code_challenge',        challenge)
+      shell.openExternal(url.toString())
+    })
+
+    setTimeout(() => { server.close(); reject(new Error('Timeout esperando autorización de Spotify')) }, 180_000)
+  })
+}
+
+async function exchangeCode(code, verifier) {
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code', code,
+      redirect_uri: REDIRECT_URI, client_id: CLIENT_ID, code_verifier: verifier,
+    }),
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error_description || data.error)
+  return {
+    access_token:  data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at:    Date.now() + data.expires_in * 1000,
+  }
+}
+
+// ─── Token management ─────────────────────────────────────────────────────────
+async function getValidToken(store, userId) {
+  const tokens = store.get(`spotify_tokens_${userId}`)
+  if (!tokens) return null
+  if (Date.now() < tokens.expires_at - 60_000) return tokens.access_token
+
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: CLIENT_ID,
+      }),
+    })
+    const data = await res.json()
+    if (data.error) { store.delete(`spotify_tokens_${userId}`); return null }
+    const updated = {
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token || tokens.refresh_token,
+      expires_at:    Date.now() + data.expires_in * 1000,
+    }
+    store.set(`spotify_tokens_${userId}`, updated)
+    return updated.access_token
+  } catch { return null }
+}
+
+// ─── Spotify API helper ───────────────────────────────────────────────────────
+async function spotifyApi(token, method, path, body) {
+  const res = await fetch(`https://api.spotify.com/v1${path}`, {
+    method,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (res.status === 204) return null
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error?.message || `Spotify ${res.status}`)
+  return data
+}
+
+// ─── Intent detection & parsing ───────────────────────────────────────────────
+const MUSIC_RE = /\b(m[uú]sica|canci[oó]n|playlist|spotify|pon[eé]?m?e?|reproducir|reproduc[ií]|siguiente|pr[oó]xim[ao]|anterior|atr[aá]s|pausar?|pausá|reanudar|continuar|volumen|[aá]lbum|escuchar|shuffle|aleatori|qu[eé]\s+(suena|canta|toca|est[aá]))\b/i
+
+function isMusicCommand(text) {
+  return MUSIC_RE.test(text)
+}
+
+function parseSimple(text) {
+  const t = text.toLowerCase()
+  if (/\b(siguiente|skip|next|pr[oó]xim)\b/.test(t))                                      return { action: 'next' }
+  if (/\b(anterior|atr[aá]s|prev(ious)?|volver|retroceder)\b/.test(t))                    return { action: 'previous' }
+  if (/\b(pausa[r]?|pausá|detener)\b/.test(t) && !/\bpon[eé]?m?\b/.test(t))              return { action: 'pause' }
+  if (/\b(reanudar|continuar|resume|seguir)\b/.test(t) && !/\bpon[eé]?m?\b/.test(t))     return { action: 'resume' }
+  if (/qu[eé]\s+(canci[oó]n|suena|est[aá]\s+sonando|toca|canta)/.test(t))                return { action: 'current' }
+  if (/\b(shuffle|aleatori)\b/.test(t))                                                    return { action: 'shuffle' }
+  return null
+}
+
+async function parseMusicIntent(text) {
+  const simple = parseSimple(text)
+  if (simple) return simple
+
+  const groqKey = process.env.GROQ_API_KEY
+  if (!groqKey) return { action: 'unknown' }
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 80,
+        temperature: 0,
+        messages: [
+          {
+            role: 'system',
+            content: `Convertí el comando de música en JSON. Respondé SOLO con JSON sin markdown ni texto extra:
+{"action":"play_artist|play_track|play_genre|play_playlist|volume_up|volume_down|volume_set|unknown","query":"texto","volume":número_0_100}
+Ejemplos:
+"poné Bad Bunny" → {"action":"play_artist","query":"Bad Bunny"}
+"pon Shape of You" → {"action":"play_track","query":"Shape of You"}
+"poneme reggaeton" → {"action":"play_genre","query":"reggaeton"}
+"mi playlist de gaming" → {"action":"play_playlist","query":"gaming"}
+"playlist de concentración" → {"action":"play_playlist","query":"concentración"}
+"volumen al 60" → {"action":"volume_set","query":"","volume":60}
+"subí el volumen" → {"action":"volume_up","query":""}
+"bajá el volumen" → {"action":"volume_down","query":""}`
+          },
+          { role: 'user', content: text }
+        ]
+      })
+    })
+    const data    = await res.json()
+    const content = data.choices?.[0]?.message?.content?.trim() || '{}'
+    return JSON.parse(content)
+  } catch {
+    return { action: 'unknown' }
+  }
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+async function handleMusicCommand(message, store, userId) {
+  const token = await getValidToken(store, userId)
+  if (!token) {
+    return { text: 'Primero conectá Spotify desde ⚙ Config → "Conectar Spotify" 🎵' }
+  }
+
+  const intent = await parseMusicIntent(message)
+  console.log('[SPOTIFY] Intent:', JSON.stringify(intent))
+
+  try {
+    switch (intent.action) {
+      case 'play_artist': {
+        const r      = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=artist&limit=1`)
+        const artist = r.artists?.items?.[0]
+        if (!artist) return { text: `No encontré al artista "${intent.query}" en Spotify.` }
+        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
+        return { text: `Poniendo ${artist.name} 🎵` }
+      }
+      case 'play_track': {
+        const r     = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=track&limit=1`)
+        const track = r.tracks?.items?.[0]
+        if (!track) return { text: `No encontré "${intent.query}" en Spotify.` }
+        await spotifyApi(token, 'PUT', '/me/player/play', { uris: [track.uri] })
+        return { text: `Poniendo "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵` }
+      }
+      case 'play_genre': {
+        const r  = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=playlist&limit=3`)
+        const pl = r.playlists?.items?.[0]
+        if (!pl) return { text: `No encontré playlists de ${intent.query}.` }
+        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: pl.uri })
+        return { text: `Poniendo ${intent.query} 🎵` }
+      }
+      case 'play_playlist': {
+        const r     = await spotifyApi(token, 'GET', '/me/playlists?limit=50')
+        const match = r.items?.find(p => p.name.toLowerCase().includes(intent.query.toLowerCase()))
+        if (!match) return { text: `No encontré ninguna playlist tuya que diga "${intent.query}". ¿Cómo se llama exactamente?` }
+        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: match.uri })
+        return { text: `Poniendo playlist "${match.name}" 🎵` }
+      }
+      case 'next':
+        await spotifyApi(token, 'POST', '/me/player/next')
+        return { text: 'Siguiente ⏭' }
+      case 'previous':
+        await spotifyApi(token, 'POST', '/me/player/previous')
+        return { text: 'Anterior ⏮' }
+      case 'pause':
+        await spotifyApi(token, 'PUT', '/me/player/pause')
+        return { text: 'Pausado ⏸' }
+      case 'resume':
+        await spotifyApi(token, 'PUT', '/me/player/play')
+        return { text: 'Reproduciendo ▶' }
+      case 'volume_set': {
+        const vol = Math.min(100, Math.max(0, intent.volume || 50))
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${vol}`)
+        return { text: `Volumen al ${vol}% 🔊` }
+      }
+      case 'volume_up': {
+        const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
+        const cur = pb?.device?.volume_percent ?? 50
+        const nv  = Math.min(100, cur + 20)
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
+        return { text: `Volumen al ${nv}% 🔊` }
+      }
+      case 'volume_down': {
+        const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
+        const cur = pb?.device?.volume_percent ?? 50
+        const nv  = Math.max(0, cur - 20)
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
+        return { text: `Volumen al ${nv}% 🔊` }
+      }
+      case 'shuffle':
+        await spotifyApi(token, 'PUT', '/me/player/shuffle?state=true')
+        return { text: 'Modo aleatorio activado 🔀' }
+      case 'current': {
+        const r = await spotifyApi(token, 'GET', '/me/player/currently-playing')
+        if (!r?.item) return { text: 'No hay nada reproduciendo en Spotify ahora.' }
+        return { text: `Suena: "${r.item.name}" — ${r.item.artists.map(a => a.name).join(', ')} 🎵` }
+      }
+      default:
+        return null // no es un comando musical claro → dejar que lo maneje la IA de gaming
+    }
+  } catch (err) {
+    const msg = err.message || ''
+    if (msg.includes('PREMIUM_REQUIRED') || msg.toLowerCase().includes('premium')) {
+      return { text: 'El control de Spotify requiere cuenta Premium.' }
+    }
+    if (msg.includes('NO_ACTIVE_DEVICE') || msg.includes('404')) {
+      return { text: 'Abrí Spotify y reproducí algo primero para activar el dispositivo.' }
+    }
+    console.error('[SPOTIFY] Error:', msg)
+    return { text: `Error con Spotify: ${msg}` }
+  }
+}
+
+module.exports = { startAuth, handleMusicCommand, isMusicCommand, getValidToken }
