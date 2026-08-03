@@ -46,7 +46,7 @@ async function detectarNecesidadVisual(pregunta) {
   }
 }
 
-async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null) {
+async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null) {
   if (!EDGE_KEY) return { text: 'Error: no hay configuración de Supabase en .env', vision: false }
 
   const memoryContext = buildMemoryContext(memory)
@@ -66,7 +66,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
     } catch (_) {}
   }
 
-  const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext)
+  const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext, wikiContext)
   const userText = message + searchContext
 
   // Visión con Gemini — inyecta historial reciente en el systemPrompt para mantener contexto
@@ -117,7 +117,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   }
 }
 
-function buildSystemPrompt(game, memoryContext, vectorContext) {
+function buildSystemPrompt(game, memoryContext, vectorContext, wikiContext = null) {
   return `${game ? `JUEGO ACTIVO: ${game}\nSi la pregunta es sobre videojuegos, respondé sobre ${game}. Si la pregunta es sobre otra cosa, ayudá igual.\n\n` : ''}Sos Iris, copiloto táctico de gaming. Respondés rápido, preciso y con tono de compañero de equipo. Sin rodeos, sin formalidades.
 
 REGLAS DE RESPUESTA:
@@ -135,7 +135,7 @@ LO QUE PODÉS VER:
 DIAGNÓSTICO IRIS:
 - Atajo de voz no funciona en juego competitivo → anti-cheat bloquea la tecla → usar Mouse4/Mouse5 desde ⚙ Config.
 - Overlay no se ve → juego debe estar en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
-${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior — solo aplicar si es sobre ${game || 'este juego'}]:\n${vectorContext}` : ''}`
+${memoryContext}${vectorContext ? `\n\n[Recuerdo de sesión anterior — solo aplicar si es sobre ${game || 'este juego'}]:\n${vectorContext}` : ''}${wikiContext ? `\n\n[Wiki Iris — info verificada sobre ${game}]:\n## ${wikiContext.title}\n${wikiContext.content}` : ''}`
 }
 
 function buildMemoryContext(memory) {

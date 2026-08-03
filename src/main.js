@@ -1020,10 +1020,16 @@ ipcMain.handle('send-message', async (_, { message }) => {
   const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
   const vectorContext = await buscarRecuerdoVectorial(userId, chat.game, message)
 
+  // 3b. Buscar en la wiki de gaming (solo si hay juego activo y sin screenshot)
+  const { searchWiki } = require('./wikiSearch')
+  const wikiContext = (!screenshotBase64 && chat.game)
+    ? await searchWiki(chat.game, message).catch(() => null)
+    : null
+
   // 4. Llamar al modelo correspondiente
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext)
   } catch (e) {
     throw new Error('Gemini: ' + (e.message || String(e)))
   }
@@ -1207,10 +1213,15 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 
   const vectorContext = await buscarRecuerdoVectorial(userId, chat.game, message)
 
+  const { searchWiki } = require('./wikiSearch')
+  const wikiContext = (!screenshotBase64 && chat.game)
+    ? await searchWiki(chat.game, message).catch(() => null)
+    : null
+
   // 3. Llamar al modelo
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext)
   } catch (e) {
     return { error: 'Error IA: ' + e.message }
   }
