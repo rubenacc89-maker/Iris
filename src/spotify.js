@@ -116,7 +116,7 @@ async function spotifyApi(token, method, path, body) {
 }
 
 // ─── Intent detection & parsing ───────────────────────────────────────────────
-const MUSIC_RE = /\b(m[uú]sica|canci[oó]n|playlist|spotify|pon[eé]?m?e?|reproducir|reproduc[ií]|siguiente|pr[oó]xim[ao]|anterior|atr[aá]s|pausar?|pausá|reanudar|continuar|volumen|[aá]lbum|escuchar|shuffle|aleatori|qu[eé]\s+(suena|canta|toca|est[aá]))\b/i
+const MUSIC_RE = /\b(m[uú]sica|canci[oó]n|playlist|spotify|pon[eé]?m?e?|reproduc\w*|siguiente|pr[oó]xim[ao]|anterior|atr[aá]s|pausar?|pausá|reanudar|continuar|volumen|[aá]lbum|escucha[r]?|toca[r]?|shuffle|aleatori|qu[eé]\s+(suena|canta|toca|est[aá]))\b/i
 
 function isMusicCommand(text) {
   return MUSIC_RE.test(text)
