@@ -46,7 +46,7 @@ async function detectarNecesidadVisual(pregunta) {
   }
 }
 
-async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null) {
+async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null, liveContext = null) {
   if (!EDGE_KEY) return { text: 'Error: no hay configuración de Supabase en .env', vision: false }
 
   const memoryContext = buildMemoryContext(memory)
@@ -67,7 +67,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   }
 
   const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext, wikiContext)
-  const userText = message + searchContext
+  const userText = message + (liveContext ? `\n\n${liveContext}` : '') + searchContext
 
   // Visión con Gemini — inyecta historial reciente en el systemPrompt para mantener contexto
   if (screenshotBase64) {

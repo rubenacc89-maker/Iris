@@ -1026,10 +1026,17 @@ ipcMain.handle('send-message', async (_, { message }) => {
     ? await searchWiki(chat.game, message).catch(() => null)
     : null
 
+  // 3c. Consultar API en tiempo real del juego activo (precios, stats live)
+  const { getGameApi } = require('./gameApis/index')
+  const gameApi = getGameApi(chat.game)
+  const liveContext = (gameApi && !screenshotBase64)
+    ? await gameApi.fetchContext(message).catch(() => null)
+    : null
+
   // 4. Llamar al modelo correspondiente
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext)
   } catch (e) {
     throw new Error('Gemini: ' + (e.message || String(e)))
   }
@@ -1218,10 +1225,16 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     ? await searchWiki(chat.game, message).catch(() => null)
     : null
 
+  const { getGameApi } = require('./gameApis/index')
+  const gameApi = getGameApi(chat.game)
+  const liveContext = (gameApi && !screenshotBase64)
+    ? await gameApi.fetchContext(message).catch(() => null)
+    : null
+
   // 3. Llamar al modelo
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext)
   } catch (e) {
     return { error: 'Error IA: ' + e.message }
   }
