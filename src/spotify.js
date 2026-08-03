@@ -385,7 +385,7 @@ async function handleMusicCommand(message, store, userId) {
     if (msg.includes('PREMIUM_REQUIRED') || msg.toLowerCase().includes('premium')) {
       return { text: 'Necesitás Spotify Premium para esto.', silent: false }
     }
-    if (msg.includes('NO_ACTIVE_DEVICE') || msg.includes('404')) {
+    if (msg.includes('NO_ACTIVE_DEVICE') || msg.includes('404') || msg.toLowerCase().includes('no active device')) {
       return { text: 'Abrí Spotify primero y reproducí algo.', silent: false }
     }
     if (msg.includes('Restriction violated') || msg.includes('restriction')) {
