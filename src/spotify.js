@@ -154,7 +154,14 @@ function parseSimple(text) {
 }
 
 async function parseMusicIntent(text) {
-  const simple = parseSimple(text)
+  // STT en español frecuentemente convierte "reproduce" → "se produce" o "produce"
+  // Normalizamos antes de parsear para evitar que Groq clasifique como unknown
+  const normalized = text
+    .replace(/\bse\s+produce\b/gi, 'reproduce')
+    .replace(/\bse\s+reproduce\b/gi, 'reproduce')
+    .replace(/^produce\b/i, 'reproduce')
+
+  const simple = parseSimple(normalized)
   if (simple) return simple
 
   const groqKey = process.env.GROQ_API_KEY
@@ -202,10 +209,12 @@ EJEMPLOS:
 "reproduce Despacito de Luis Fonsi" → {"action":"play_track","track_name":"Despacito","artist_name":"Luis Fonsi","query":"","volume":0}
 "reproduce Bad Bunny" → {"action":"play_artist","track_name":"","artist_name":"Bad Bunny","query":"","volume":0}
 "poneme reggaeton" → {"action":"play_genre","track_name":"","artist_name":"","query":"reggaeton","volume":0}
+"reproduce música en Spotify" → {"action":"play_genre","track_name":"","artist_name":"","query":"música","volume":0}
+"reproduce música" → {"action":"play_genre","track_name":"","artist_name":"","query":"música","volume":0}
 "mi playlist de gaming" → {"action":"play_playlist","track_name":"","artist_name":"","query":"gaming","volume":0}
 "volumen al 60" → {"action":"volume_set","track_name":"","artist_name":"","query":"","volume":60}`
           },
-          { role: 'user', content: text }
+          { role: 'user', content: normalized }
         ]
       })
     })
