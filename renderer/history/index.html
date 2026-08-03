@@ -140,8 +140,12 @@
     .hdr-btn.danger:hover { color: #f38ba8; background: transparent; }
     .hdr-btn svg { width: 14px; height: 14px; fill: currentColor; }
 
-    /* Tabs */
+    /* Tabs — solo Conversación y Config visibles */
     #tabs {
+      display: flex;
+    }
+    #tabs .tab:nth-child(2),
+    #tabs .tab:nth-child(4) {
       display: none;
     }
 
