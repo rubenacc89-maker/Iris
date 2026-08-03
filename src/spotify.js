@@ -343,14 +343,17 @@ async function handleMusicCommand(message, store, userId) {
     }
   } catch (err) {
     const msg = err.message || ''
+    console.error('[SPOTIFY] Error:', msg)
     if (msg.includes('PREMIUM_REQUIRED') || msg.toLowerCase().includes('premium')) {
-      return { text: 'El control de Spotify requiere cuenta Premium.', silent: false }
+      return { text: 'Necesitás Spotify Premium para esto.', silent: false }
     }
     if (msg.includes('NO_ACTIVE_DEVICE') || msg.includes('404')) {
-      return { text: 'Abrí Spotify y reproducí algo primero para activar el dispositivo.', silent: false }
+      return { text: 'Abrí Spotify primero y reproducí algo.', silent: false }
     }
-    console.error('[SPOTIFY] Error:', msg)
-    return { text: `Error con Spotify: ${msg}`, silent: false }
+    if (msg.includes('Restriction violated') || msg.includes('restriction')) {
+      return { text: 'Spotify no pudo reproducir esto. Abrí Spotify y probá de nuevo.', silent: false }
+    }
+    return { text: 'Hubo un problema con Spotify. Intentá de nuevo.', silent: false }
   }
 }
 
