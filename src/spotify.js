@@ -249,6 +249,20 @@ async function handleMusicCommand(message, store, userId) {
   console.log('[SPOTIFY] Intent:', JSON.stringify(intent))
 
   try {
+    // Un solo GET /me/player nos da: dispositivo activo + volumen actual.
+    // Si no hay dispositivo activo, buscamos en /me/player/devices para
+    // poder activar Spotify aunque no esté reproduciendo nada todavía.
+    const playerState = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
+    let deviceId = playerState?.device?.id ?? null
+    if (!deviceId) {
+      const devs = await spotifyApi(token, 'GET', '/me/player/devices').catch(() => null)
+      deviceId = devs?.devices?.[0]?.id ?? null
+    }
+
+    // Helper para armar el body de play con device_id cuando está disponible
+    const playBody = (extra) => deviceId ? { ...extra, device_id: deviceId } : extra
+    const deviceQ  = deviceId ? `?device_id=${deviceId}` : ''
+
     switch (intent.action) {
       case 'play_artist': {
         const artistName = intent.artist_name || intent.query
@@ -265,7 +279,8 @@ async function handleMusicCommand(message, store, userId) {
           if (artist) break
         }
         if (!artist) return { text: `No encontré al artista "${artistName}" en Spotify.`, silent: false }
-        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
+        if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+        await spotifyApi(token, 'PUT', '/me/player/play', playBody({ context_uri: artist.uri }))
         return { text: `Poniendo ${artist.name} 🎵`, silent: true }
       }
       case 'play_track': {
@@ -315,62 +330,65 @@ async function handleMusicCommand(message, store, userId) {
           const ra     = await spotifyApi(token, 'GET', `/search?q=artist:"${norm(artistName)}"&type=artist&limit=1`)
           const artist = ra.artists?.items?.[0]
           if (artist) {
-            await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: artist.uri })
+            if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+            await spotifyApi(token, 'PUT', '/me/player/play', playBody({ context_uri: artist.uri }))
             return { text: `No encontré "${trackName}" exactamente — poniendo ${artist.name} 🎵`, silent: true }
           }
         }
 
         if (!track) return { text: `No encontré "${trackName}" en Spotify.`, silent: false }
-        await spotifyApi(token, 'PUT', '/me/player/play', { uris: [track.uri] })
+        if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+        await spotifyApi(token, 'PUT', '/me/player/play', playBody({ uris: [track.uri] }))
         return { text: `Sonando: "${track.name}" — ${track.artists.map(a => a.name).join(', ')} 🎵`, silent: true }
       }
       case 'play_genre': {
         const r  = await spotifyApi(token, 'GET', `/search?q=${encodeURIComponent(intent.query)}&type=playlist&limit=3`)
         const pl = r.playlists?.items?.[0]
         if (!pl) return { text: `No encontré playlists de ${intent.query}.`, silent: false }
-        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: pl.uri })
+        if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+        await spotifyApi(token, 'PUT', '/me/player/play', playBody({ context_uri: pl.uri }))
         return { text: `Poniendo ${intent.query} 🎵`, silent: true }
       }
       case 'play_playlist': {
         const r     = await spotifyApi(token, 'GET', '/me/playlists?limit=50')
         const match = r.items?.find(p => p.name.toLowerCase().includes(intent.query.toLowerCase()))
         if (!match) return { text: `No encontré ninguna playlist tuya que diga "${intent.query}". ¿Cómo se llama exactamente?`, silent: false }
-        await spotifyApi(token, 'PUT', '/me/player/play', { context_uri: match.uri })
+        if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+        await spotifyApi(token, 'PUT', '/me/player/play', playBody({ context_uri: match.uri }))
         return { text: `Poniendo playlist "${match.name}" 🎵`, silent: true }
       }
       case 'next':
-        await spotifyApi(token, 'POST', '/me/player/next')
+        await spotifyApi(token, 'POST', `/me/player/next${deviceQ}`)
         return { text: 'Siguiente ⏭', silent: true }
       case 'previous':
-        await spotifyApi(token, 'POST', '/me/player/previous')
+        await spotifyApi(token, 'POST', `/me/player/previous${deviceQ}`)
         return { text: 'Anterior ⏮', silent: true }
       case 'pause':
-        await spotifyApi(token, 'PUT', '/me/player/pause')
+        await spotifyApi(token, 'PUT', `/me/player/pause${deviceQ}`)
         return { text: 'Pausado ⏸', silent: true }
       case 'resume':
-        await spotifyApi(token, 'PUT', '/me/player/play')
+        if (!deviceId) return { text: 'Abrí Spotify primero.', silent: false }
+        await spotifyApi(token, 'PUT', '/me/player/play', playBody({}))
         return { text: 'Reproduciendo ▶', silent: true }
       case 'volume_set': {
         const vol = Math.min(100, Math.max(0, intent.volume || 50))
-        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${vol}`)
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${vol}${deviceId ? `&device_id=${deviceId}` : ''}`)
         return { text: `Volumen al ${vol}% 🔊`, silent: true }
       }
       case 'volume_up': {
-        const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
-        const cur = pb?.device?.volume_percent ?? 50
+        const cur = playerState?.device?.volume_percent ?? 50
         const nv  = Math.min(100, cur + 20)
-        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}${deviceId ? `&device_id=${deviceId}` : ''}`)
         return { text: `Volumen al ${nv}% 🔊`, silent: true }
       }
       case 'volume_down': {
-        const pb  = await spotifyApi(token, 'GET', '/me/player').catch(() => null)
-        const cur = pb?.device?.volume_percent ?? 50
+        const cur = playerState?.device?.volume_percent ?? 50
         const nv  = Math.max(0, cur - 20)
-        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}`)
+        await spotifyApi(token, 'PUT', `/me/player/volume?volume_percent=${nv}${deviceId ? `&device_id=${deviceId}` : ''}`)
         return { text: `Volumen al ${nv}% 🔊`, silent: true }
       }
       case 'shuffle':
-        await spotifyApi(token, 'PUT', '/me/player/shuffle?state=true')
+        await spotifyApi(token, 'PUT', `/me/player/shuffle?state=true${deviceId ? `&device_id=${deviceId}` : ''}`)
         return { text: 'Modo aleatorio activado 🔀', silent: true }
       case 'current': {
         const r = await spotifyApi(token, 'GET', '/me/player/currently-playing')
