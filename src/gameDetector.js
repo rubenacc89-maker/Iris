@@ -74,6 +74,10 @@ const GAME_PROCESSES = {
   'HollowKnight.exe':                     'Hollow Knight',
   'Brawlhalla.exe':                       'Brawlhalla',
 
+  // Extraction Shooters
+  'ArcRaiders.exe':                       'Arc Raiders',
+  'Arc Raiders.exe':                      'Arc Raiders',
+
   // Survival / Sandbox
   'ShooterGame.exe':                      'ARK: Survival Evolved',
   'Valheim.exe':                          'Valheim',
