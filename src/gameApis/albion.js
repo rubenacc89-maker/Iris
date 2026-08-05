@@ -76,7 +76,7 @@ function formatPrices(data, itemIds) {
 
 // Detecta si la pregunta es sobre precios de mercado
 function isPriceQuestion(text) {
-  return /precio|vale|cuesta|cuánto|mercado|vender|comprar|plata|silver|market/i.test(text)
+  return /precio|vale|cuesta|cu[aá]nto|mercado|vender|comprar|plata|silver|market|pagan|cobran|cuestan|dan por/i.test(text)
 }
 
 // Extrae qué item está preguntando
@@ -92,16 +92,29 @@ function extractItemIds(text) {
   const tierMatch = lower.match(/t(\d)/i)
   const tier = tierMatch ? tierMatch[1] : null
 
+  const isHide   = /piel|piles|pieles|hide|cuero|leather/.test(lower)
+  const isWood   = /madera|wood|tabl[oó]n|plank/.test(lower)
+  const isOre    = /mineral|ore|metal/.test(lower)
+  const isFiber  = /fibra|fiber|tela|cloth/.test(lower)
+  const isStone  = /piedra|rock|bloque|stone/.test(lower)
+
   if (tier) {
-    if (/piel|hide|cuero|leather/.test(lower)) return [`T${tier}_HIDE`, `T${tier}_LEATHER`]
-    if (/madera|wood|tablón|plank/.test(lower))  return [`T${tier}_WOOD`, `T${tier}_PLANKS`]
-    if (/mineral|ore|metal/.test(lower))          return [`T${tier}_ORE`, `T${tier}_METALBAR`]
-    if (/fibra|fiber|tela|cloth/.test(lower))     return [`T${tier}_FIBER`, `T${tier}_CLOTH`]
-    if (/piedra|rock|bloque|stone/.test(lower))   return [`T${tier}_ROCK`, `T${tier}_STONEBLOCK`]
+    if (isHide)  return [`T${tier}_HIDE`, `T${tier}_LEATHER`]
+    if (isWood)  return [`T${tier}_WOOD`, `T${tier}_PLANKS`]
+    if (isOre)   return [`T${tier}_ORE`, `T${tier}_METALBAR`]
+    if (isFiber) return [`T${tier}_FIBER`, `T${tier}_CLOTH`]
+    if (isStone) return [`T${tier}_ROCK`, `T${tier}_STONEBLOCK`]
   }
 
-  // Sin item específico → devolver populares para snapshot general
-  if (/mercado|precio.*hoy|qué.*vale|recursos/.test(lower)) return POPULAR_ITEMS.slice(0, 6)
+  // Recurso detectado sin tier → mostrar todos los tiers disponibles
+  if (isHide)  return ['T4_HIDE','T5_HIDE','T6_HIDE','T7_HIDE','T8_HIDE']
+  if (isWood)  return ['T4_WOOD','T5_WOOD','T6_WOOD','T7_WOOD','T8_WOOD']
+  if (isOre)   return ['T4_ORE','T5_ORE','T6_ORE','T7_ORE','T8_ORE']
+  if (isFiber) return ['T4_FIBER','T5_FIBER','T6_FIBER','T7_FIBER','T8_FIBER']
+  if (isStone) return ['T4_ROCK','T5_ROCK','T6_ROCK','T7_ROCK','T8_ROCK']
+
+  // Sin item específico → snapshot general de los más populares
+  if (/mercado|hoy|precio|recursos|cuanto/.test(lower)) return POPULAR_ITEMS.slice(0, 6)
 
   return null
 }
@@ -110,7 +123,11 @@ async function fetchContext(question) {
   if (!isPriceQuestion(question)) return null
 
   const itemIds = extractItemIds(question)
-  if (!itemIds) return null
+  if (!itemIds) {
+    return `[Precios Albion Online — cobertura limitada]
+Solo tengo precios en tiempo real de recursos: pieles, cuero, madera, tablones, mineral, metal, fibra, tela, piedra y bloques (T4 a T8).
+No tengo precios de armas, armaduras ni otros items. Para esos, el jugador debe consultar el mercado en el juego.`
+  }
 
   const data = await fetchPrices(itemIds)
   const formatted = formatPrices(data, itemIds)
