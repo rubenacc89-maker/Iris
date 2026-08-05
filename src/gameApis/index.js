@@ -2,8 +2,11 @@
 // Agregar nuevos juegos acá cuando tengamos sus APIs
 
 const GAME_API_MAP = {
-  'albion online': () => require('./albion'),
-  'albion':        () => require('./albion'),
+  'albion online':      () => require('./albion'),
+  'albion':             () => require('./albion'),
+  'league of legends':  () => require('./lol'),
+  'league':             () => require('./lol'),
+  'lol':                () => require('./lol'),
 }
 
 function getGameApi(gameName) {
