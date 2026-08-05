@@ -64,12 +64,22 @@ function formatPrices(data, itemIds) {
 
   const lines = []
   for (const id of itemIds) {
-    const rows = data.filter(r => r.item_id === id && r.sell_price_min > 0)
+    const rows = data.filter(r => r.item_id === id)
     if (!rows.length) continue
 
-    const best = rows.reduce((a, b) => a.sell_price_min < b.sell_price_min ? a : b)
+    const sellRows = rows.filter(r => r.buy_price_max > 0)
+    const buyRows  = rows.filter(r => r.sell_price_min > 0)
+
+    const bestSell = sellRows.length ? sellRows.reduce((a, b) => a.buy_price_max > b.buy_price_max ? a : b) : null
+    const bestBuy  = buyRows.length  ? buyRows.reduce((a, b)  => a.sell_price_min < b.sell_price_min ? a : b) : null
+
+    if (!bestSell && !bestBuy) continue
+
     const label = id.replace(/_/g, ' ').toLowerCase()
-    lines.push(`• ${label}: ${best.sell_price_min.toLocaleString()} plata (más barato en ${best.city})`)
+    const parts = []
+    if (bestSell) parts.push(`VENDER en ${bestSell.city}: ${bestSell.buy_price_max.toLocaleString()} plata`)
+    if (bestBuy)  parts.push(`COMPRAR en ${bestBuy.city}: ${bestBuy.sell_price_min.toLocaleString()} plata`)
+    lines.push(`• ${label}: ${parts.join(' | ')}`)
   }
   return lines.length ? lines.join('\n') : null
 }
