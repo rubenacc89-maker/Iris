@@ -114,7 +114,7 @@ async function callGeminiGrounded(systemPrompt: string, userText: string, chatHi
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents,
     tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: max_tokens },
+    generationConfig: { temperature: 0.45, maxOutputTokens: max_tokens },
   })
 
   for (const model of GEMINI_MODELS_VISION) {
