@@ -59,7 +59,13 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   const shouldSearch = !screenshotBase64 && !SOCIAL_RE.test(message.trim())
   if (shouldSearch) {
     try {
-      const query = game ? `${game} ${message} patch build guia` : `${message} videojuego guia`
+      // Si el mensaje es corto y parece pregunta de seguimiento, enriquecemos con la última pregunta del historial
+      let queryBase = message
+      if (message.length < 40 && recentHistory && recentHistory.length > 0) {
+        const lastQ = recentHistory[recentHistory.length - 1]?.question || ''
+        if (lastQ.length > 10) queryBase = `${lastQ} ${message}`
+      }
+      const query = game ? `${game} ${queryBase} guia` : `${queryBase} videojuego`
       const results = await searchWeb(query, game)
       if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
         searchContext = `\n\n[Información web actualizada]:\n${results}`
