@@ -881,6 +881,7 @@ footer {
   <ul class="nav-links">
     <li><a href="#features">Funciones</a></li>
     <li><a href="#how">Cómo funciona</a></li>
+    <li><a href="#metas">Metas</a></li>
     <li><a href="#contact">Contacto</a></li>
   </ul>
   <a href="https://github.com/rubenacc89-maker/Iris/releases/download/v1.0.5/Iris-Setup-1.0.5.exe" class="nav-cta" download>
@@ -1101,6 +1102,198 @@ footer {
     Descargar Iris
   </a>
 </div>
+
+<!-- ── METAS / ROADMAP ───────────────────────────── -->
+<style>
+.metas-stats {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  margin-bottom: 3rem;
+}
+.metas-stat { background: var(--surface); padding: 1.5rem; text-align: center; }
+.metas-stat-val {
+  font-size: 2rem; font-weight: 900; letter-spacing: -0.04em;
+  color: #fff; line-height: 1; margin-bottom: 0.3rem; font-variant-numeric: tabular-nums;
+}
+.metas-stat-val.green { color: var(--green); }
+.metas-stat-lbl {
+  font-size: 0.72rem; color: var(--muted); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.35rem;
+}
+.metas-live { display: flex; align-items: center; justify-content: center; gap: 0.3rem; font-size: 0.68rem; color: var(--muted); }
+.live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+.milestones-list { display: flex; flex-direction: column; gap: 1.25rem; }
+.milestone-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.75rem 2rem; transition: border-color 0.2s;
+}
+.milestone-item:hover { border-color: rgba(200,200,200,0.2); }
+.milestone-item.done { border-color: rgba(34,197,94,0.25); }
+.milestone-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.75rem; }
+.milestone-badge {
+  display: inline-flex; font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.2rem 0.65rem; border-radius: 100px; margin-bottom: 0.5rem;
+}
+.badge-done { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.badge-active { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(200,200,200,0.15); }
+.milestone-name { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1.25; }
+.milestone-n {
+  font-size: 2.5rem; font-weight: 900; letter-spacing: -0.05em;
+  color: var(--border); line-height: 1; flex-shrink: 0; font-variant-numeric: tabular-nums;
+}
+.milestone-item.done .milestone-n { color: rgba(34,197,94,0.2); }
+.milestone-desc { font-size: 0.88rem; color: var(--muted); line-height: 1.7; margin-bottom: 1.25rem; }
+.mbar-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+.mbar-track { height: 5px; background: var(--surface2); border-radius: 100px; border: 1px solid var(--border); overflow: hidden; }
+.mbar-fill {
+  height: 100%; border-radius: 100px;
+  background: linear-gradient(90deg, #e8e8e8, #fff);
+  width: 0%; transition: width 1.4s cubic-bezier(0.22,1,0.36,1);
+}
+.mbar-fill.green { background: linear-gradient(90deg, var(--green), #4ade80); box-shadow: 0 0 8px rgba(34,197,94,0.3); }
+.mbar-fill.done-fill { width: 100% !important; background: linear-gradient(90deg, var(--green), #4ade80); box-shadow: 0 0 10px rgba(34,197,94,0.3); }
+@media (max-width: 700px) {
+  .metas-stats { grid-template-columns: 1fr 1fr; }
+  .milestone-top { flex-direction: column-reverse; }
+  .milestone-n { font-size: 1.5rem; }
+}
+</style>
+
+<div class="section section-divider" id="metas">
+  <div class="tag">Hoja de ruta pública</div>
+  <h2 class="sec-title">Construyendo Iris<br>con la comunidad</h2>
+
+  <div class="metas-stats">
+    <div class="metas-stat">
+      <div class="metas-stat-val" id="ms-downloads">—</div>
+      <div class="metas-stat-lbl">Descargas totales</div>
+      <div class="metas-live"><span class="live-dot"></span> GitHub Releases</div>
+    </div>
+    <div class="metas-stat">
+      <div class="metas-stat-val green" id="ms-users">—</div>
+      <div class="metas-stat-lbl">Usuarios totales</div>
+      <div class="metas-live"><span class="live-dot"></span> Supabase</div>
+    </div>
+    <div class="metas-stat">
+      <div class="metas-stat-val" id="ms-weekly">—</div>
+      <div class="metas-stat-lbl">Activos esta semana</div>
+      <div class="metas-live"><span class="live-dot"></span> Supabase</div>
+    </div>
+    <div class="metas-stat">
+      <div class="metas-stat-val" id="ms-days">—</div>
+      <div class="metas-stat-lbl">Días en producción</div>
+      <div class="metas-live"><span class="live-dot"></span> Desde v1.0.0</div>
+    </div>
+  </div>
+
+  <div class="milestones-list">
+
+    <div class="milestone-item done">
+      <div class="milestone-top">
+        <div>
+          <div class="milestone-badge badge-done">✓ Completado</div>
+          <div class="milestone-name">Microsoft certifica Iris como programa legítimo</div>
+        </div>
+        <div class="milestone-n">01</div>
+      </div>
+      <p class="milestone-desc">
+        Enviamos el ejecutable a Microsoft Security Intelligence el 23 de julio de 2026. El análisis se completó con resultado <strong style="color:var(--green)">limpio</strong> — Iris no es malware, spyware ni programa no deseado. Paso necesario antes de cualquier distribución masiva.
+      </p>
+      <div class="mbar-meta">
+        <span style="color:var(--green);font-size:.85rem;font-weight:700">Completado · 23 jul 2026</span>
+        <span style="font-size:.75rem;color:var(--muted)">Submission ID: 6c5c7aef</span>
+      </div>
+      <div class="mbar-track"><div class="mbar-fill done-fill"></div></div>
+    </div>
+
+    <div class="milestone-item">
+      <div class="milestone-top">
+        <div>
+          <div class="milestone-badge badge-active">En progreso</div>
+          <div class="milestone-name">10,000 descargas — SmartScreen sin advertencias</div>
+        </div>
+        <div class="milestone-n">02</div>
+      </div>
+      <p class="milestone-desc">
+        Windows SmartScreen muestra una advertencia en instaladores desconocidos — no porque sean peligrosos, sino porque son nuevos. Con suficientes descargas, Microsoft construye reputación automática para Iris y la advertencia desaparece sola. <strong style="color:var(--text)">Cada descarga cuenta directamente.</strong>
+      </p>
+      <div class="mbar-meta">
+        <span id="ms-dl-txt" style="font-size:.85rem;font-weight:700;color:var(--text)">— descargas</span>
+        <span style="font-size:.75rem;color:var(--muted)">Meta: 10,000</span>
+      </div>
+      <div class="mbar-track"><div class="mbar-fill" id="mbar-dl"></div></div>
+    </div>
+
+    <div class="milestone-item">
+      <div class="milestone-top">
+        <div>
+          <div class="milestone-badge badge-active">En progreso</div>
+          <div class="milestone-name">250,000 usuarios activos — alianzas y modo profundo</div>
+        </div>
+        <div class="milestone-n">03</div>
+      </div>
+      <p class="milestone-desc">
+        Con 250,000 usuarios podemos tocar la puerta de publishers, plataformas de juego y creadores de otra manera. Es el número mínimo para que empresas grandes digan "sí". Además en este punto lanzamos el <strong style="color:var(--text)">Modo Profundo</strong>: el usuario elige un juego para análisis especializado — meta actual, coaching en tiempo real, estadísticas avanzadas.
+      </p>
+      <div class="mbar-meta">
+        <span id="ms-u-txt" style="font-size:.85rem;font-weight:700;color:var(--text)">— usuarios</span>
+        <span style="font-size:.75rem;color:var(--muted)">Meta: 250,000</span>
+      </div>
+      <div class="mbar-track"><div class="mbar-fill green" id="mbar-u"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const SUPA_URL  = 'https://ptkfxanrkbbgthmmhevn.supabase.co'
+  const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0a2Z4YW5ya2JiZ3RobW1oZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzkyNTksImV4cCI6MjA5OTgxNTI1OX0.b0b1FV5OC2wpwdI6ABZ3YR7kRXXcwtrIFpTn0Qa3Rrc'
+  const LAUNCH    = new Date('2026-07-22')
+
+  function fmt(n) {
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M'
+    if (n >= 1e3) return (n/1e3).toFixed(1)+'K'
+    return n.toLocaleString()
+  }
+  function setBar(id, cur, max) {
+    const el = document.getElementById(id)
+    if (el) setTimeout(() => { el.style.width = Math.min((cur/max)*100,100)+'%' }, 500)
+  }
+
+  document.getElementById('ms-days').textContent = Math.floor((Date.now()-LAUNCH)/86400000)
+
+  fetch('https://api.github.com/repos/rubenacc89-maker/Iris/releases')
+    .then(r=>r.json()).then(releases=>{
+      let total=0
+      releases.forEach(r=>r.assets.forEach(a=>{ if(a.name.endsWith('.exe')) total+=a.download_count }))
+      document.getElementById('ms-downloads').textContent = fmt(total)
+      document.getElementById('ms-dl-txt').textContent = total.toLocaleString()+' descargas'
+      setBar('mbar-dl', total, 10000)
+    }).catch(()=>{})
+
+  const h = { apikey:SUPA_ANON, Authorization:'Bearer '+SUPA_ANON, Prefer:'count=exact', Range:'0-0' }
+
+  fetch(SUPA_URL+'/rest/v1/telemetry?select=user_id&event=eq.app_start', {headers:h})
+    .then(r=>parseInt(r.headers.get('content-range')?.split('/')[1]||'0'))
+    .then(c=>{ if(c>0){ document.getElementById('ms-users').textContent=fmt(c); document.getElementById('ms-u-txt').textContent=c.toLocaleString()+' usuarios'; setBar('mbar-u',c,250000) } })
+    .catch(()=>{})
+
+  const since = new Date(Date.now()-7*86400000).toISOString()
+  fetch(SUPA_URL+'/rest/v1/telemetry?select=user_id&event=eq.app_start&created_at=gte.'+since, {headers:h})
+    .then(r=>parseInt(r.headers.get('content-range')?.split('/')[1]||'0'))
+    .then(c=>{ if(c>0) document.getElementById('ms-weekly').textContent=fmt(c) })
+    .catch(()=>{})
+
+  const obs = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{ if(e.isIntersecting) e.target.querySelectorAll('.mbar-fill:not(.done-fill)').forEach(b=>{ b.style.transition='width 1.4s cubic-bezier(0.22,1,0.36,1)' }) })
+  },{ threshold:0.3 })
+  document.querySelectorAll('.milestone-item').forEach(m=>obs.observe(m))
+})()
+</script>
 
 <!-- ── CONTACT ────────────────────────────────────── -->
 <div class="contact-section section-divider" id="contact">
