@@ -19,7 +19,6 @@ async function edgeFetch(body) {
 const SOCIAL_RE = /^(ok|dale|gracias|chao|bueno|entendido|joya|re|np|genial|listo|sí|si|no|bien|mal|hola|hey|perfecto|claro|obvio|ya|nop|nope|gg|wp|xd|ajá|aja|mhm|uh|ah|oh|wow|nice|cool|okok|mm|hmm|oki|okie)\.?[!?]?$/i
 
 async function detectarNecesidadVisual(pregunta) {
-  // Fast path: mensajes sociales o muy cortos nunca necesitan visión
   if (pregunta.trim().length < 4 || SOCIAL_RE.test(pregunta.trim())) {
     console.log(`[CLASIFICADOR] Fast-path NO visión: "${pregunta.slice(0, 40)}"`)
     return false
@@ -44,67 +43,50 @@ async function detectarNecesidadVisual(pregunta) {
   }
 }
 
-async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null, liveContext = null, userName = null, activeGame = null) {
+// Flujo simplificado: prompt → Gemini (con Google Search). Sin capas intermedias.
+// wikiContext = validador/dato verificado (opcional, cuando hay juego detectado)
+// liveContext = datos en tiempo real de APIs del juego (precios Albion, etc.)
+async function askGemini(message, screenshotBase64, recentHistory, wikiContext = null, liveContext = null, userName = null) {
   if (!EDGE_KEY) return { text: 'Error: no hay configuración de Supabase en .env', vision: false }
 
-  const memoryContext = buildMemoryContext(memory)
-  // game = solo el proceso detectado corriendo ahora. Si no hay juego activo, null.
-  // La memoria histórica queda como contexto de notas, no determina el juego activo.
-  const game = activeGame || null
+  const systemPrompt = buildSystemPrompt(wikiContext, userName)
+  const userText = message + (liveContext ? `\n\n[Datos en tiempo real del juego]:\n${liveContext}` : '')
 
-  const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext, wikiContext, userName)
-  const userText = message + (liveContext ? `\n\n${liveContext}` : '')
+  console.log(`[IRIS:CTX] wiki=${wikiContext ? `"${wikiContext.title}"` : 'null'} | live=${liveContext ? 'sí' : 'null'} | vision=${!!screenshotBase64}`)
+  console.log(`[IRIS:CTX] systemPrompt (${systemPrompt.length} chars):\n${systemPrompt.slice(0, 200)}…`)
 
-  // ── DIAGNÓSTICO DE CONTEXTO ──────────────────────────────────────────────
-  console.log(`[IRIS:CTX] juego="${game || 'null'}" | wiki=${wikiContext ? `"${wikiContext.title}"` : 'null'} | vector=${vectorContext ? 'sí' : 'null'} | live=${liveContext ? 'sí' : 'null'} | vision=${!!screenshotBase64}`)
-  console.log(`[IRIS:CTX] systemPrompt (${systemPrompt.length} chars) ↓\n${systemPrompt.slice(0, 300)}…`)
-
-  // Visión con Gemini — inyecta historial reciente en el systemPrompt para mantener contexto
   if (screenshotBase64) {
     let visionSystemPrompt = systemPrompt
     if (recentHistory && recentHistory.length > 0) {
       const historyText = recentHistory.slice(-5).map(e =>
         `[user]: ${e.question}\n[iris]: ${e.answer}`
       ).join('\n\n')
-      visionSystemPrompt += `\n\n[Conversación reciente — usar como contexto para entender referencias]:\n${historyText}`
+      visionSystemPrompt += `\n\n[Conversación reciente]:\n${historyText}`
     }
     try {
       const data = await edgeFetch({ type: 'vision', systemPrompt: visionSystemPrompt, userText, screenshotBase64 })
       return { text: data.text, vision: true }
     } catch (err) {
-      console.log('[IRIS] Error Gemini via proxy:', err.message || String(err))
+      console.log('[IRIS] Error Gemini vision via proxy:', err.message || String(err))
       return { text: 'No pude analizar la pantalla en este momento. Intentá sin visión.', vision: false }
     }
   }
 
-  // Texto con Groq — historial completo como array de mensajes
-  const messages = [{ role: 'system', content: systemPrompt }]
-  if (recentHistory && recentHistory.length > 0) {
-    for (const entry of recentHistory.slice(-10)) {
-      messages.push({ role: 'user', content: entry.question })
-      messages.push({ role: 'assistant', content: entry.answer })
-    }
-  }
-  messages.push({ role: 'user', content: userText })
-
-  // Modo libre: sin juego activo, sin wiki, sin vector → temperatura alta para respuesta más libre
-  const temperature = (!activeGame && !wikiContext && !vectorContext) ? 0.7 : 0.45
-  console.log(`[IRIS:CTX] temperatura=${temperature} | modo=${temperature === 0.7 ? 'LIBRE (sin contexto propio)' : 'ANCLADO (con contexto)'}`)
+  const chatHistory = (recentHistory || []).map(e => ({ question: e.question, answer: e.answer }))
 
   try {
     const data = await edgeFetch({
       type: 'grounded-chat',
       systemPrompt,
       userText,
-      chatHistory: (recentHistory || []).map(e => ({ question: e.question, answer: e.answer })),
-      messages,        // Groq fallback dentro del Edge Function si Gemini falla
+      chatHistory,
       max_tokens: 500,
-      temperature,
+      temperature: 0.7,
     })
     return { text: data.text, vision: false }
   } catch (err) {
     const msg = err.message || String(err)
-    console.log('[IRIS] Error Groq via proxy:', msg)
+    console.log('[IRIS] Error Gemini via proxy:', msg)
     if (msg.includes('429') || msg.includes('ocupados')) {
       return { text: 'Iris está muy ocupada ahora mismo, esperá unos segundos e intentá de nuevo.', vision: false }
     }
@@ -112,39 +94,18 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   }
 }
 
-function buildSystemPrompt(game, memoryContext, vectorContext, wikiContext = null, userName = null) {
+function buildSystemPrompt(wikiContext = null, userName = null) {
   const nombre = userName ? userName.split(' ')[0] : null
-  return `${game ? `JUEGO DETECTADO: ${game}\n- Si el usuario menciona explícitamente otro juego, respondé sobre ese. Ignorá el detectado.\n- Sin especificación de juego, asumí que la pregunta es sobre ${game}.\n\n` : ''}${nombre ? `USUARIO: ${nombre}. Al usar nombre en respuesta o saludo, usá "${nombre}", nunca "Iris".\n\n` : ''}Sos Iris, copiloto de gaming integrado en el escritorio. Tono de compañero de equipo: directo, sin rodeos, sin formalidades.
+  let prompt = `${nombre ? `USUARIO: ${nombre}. Al usar nombre, usá "${nombre}", nunca "Iris".\n\n` : ''}Sos Iris, copiloto de gaming integrado en el escritorio. Tono de compañero de equipo: directo, sin rodeos.
 
-Para datos concretos y verificables (cantidad de jugadores, precios, fechas, stats, mecánicas específicas): usá Google Search para confirmar antes de responder. Tu conocimiento de entrenamiento puede estar desactualizado.
+NUNCA uses: "Basándome en...", "Según la evidencia...", "Análisis:", "Conclusión:".
+NUNCA menciones "la captura", "la imagen" o "el screenshot" — describís lo que ves directamente.`
 
-NUNCA uses: "Basándome en...", "Según la evidencia...", "Análisis:", "Conclusión:", "En primer lugar...".
-NUNCA menciones "la captura", "la imagen" o "el screenshot" — simplemente describís lo que ves.
-
-SOPORTE IRIS:
-- Atajo de voz no funciona en competitivo → anti-cheat bloquea la tecla → usar Mouse4/Mouse5 desde ⚙ Config.
-- Overlay no visible → juego en modo Sin bordes (Windowed Borderless), no pantalla completa exclusiva.
-${memoryContext}${vectorContext ? `\n\n[Contexto de sesión anterior sobre ${game || 'el juego'}]:\n${vectorContext}` : ''}${wikiContext ? `\n\n[Wiki Iris — datos verificados de ${game}]:\n## ${wikiContext.title}\n${wikiContext.content}` : ''}`
-}
-
-function buildMemoryContext(memory) {
-  if (!memory || Object.keys(memory).length === 0) return ''
-
-  const games = Object.entries(memory)
-    .filter(([n]) => n && n.toLowerCase() !== 'null' && n.toLowerCase() !== 'unknown')
-    .sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
-  if (!games.length) return ''
-
-  const [currentGame, data] = games[0]
-  const lines = [`\n[Memoria de ${currentGame} — solo aplicar a preguntas sobre ${currentGame}]:`]
-
-  if (data.notes?.length) {
-    data.notes.slice(-5).forEach(n => lines.push(`- ${n}`))
-  } else {
-    lines.push('(sin notas guardadas aún)')
+  if (wikiContext) {
+    prompt += `\n\n[Wiki Iris — dato verificado, priorizá si es relevante]:\n## ${wikiContext.title}\n${wikiContext.content}`
   }
 
-  return lines.join('\n')
+  return prompt
 }
 
 module.exports = { askGemini, detectarNecesidadVisual }

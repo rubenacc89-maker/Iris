@@ -96,7 +96,7 @@ async function callGeminiEmbed(text: string, taskType: string): Promise<number[]
   return data.embedding.values
 }
 
-async function callGeminiGrounded(systemPrompt: string, userText: string, chatHistory: {question: string, answer: string}[], max_tokens: number, groqMessages: unknown[], temperature = 0.45): Promise<string> {
+async function callGeminiGrounded(systemPrompt: string, userText: string, chatHistory: {question: string, answer: string}[], max_tokens: number, groqMessages: unknown[], temperature = 0.7): Promise<string> {
   const key = Deno.env.get('GEMINI_API_KEY')
   if (!key) throw new Error('GEMINI_API_KEY no configurada en Edge Function')
 
@@ -170,7 +170,7 @@ serve(async (req: Request) => {
     // Chat con Gemini + Google Search grounding + historial
     if (type === 'grounded-chat') {
       const { chatHistory = [], messages: groqMessages, temperature } = body
-      const text = await callGeminiGrounded(systemPrompt ?? '', userText ?? '', chatHistory, max_tokens, groqMessages, temperature ?? 0.45)
+      const text = await callGeminiGrounded(systemPrompt ?? '', userText ?? '', chatHistory, max_tokens, groqMessages, temperature ?? 0.7)
       return new Response(JSON.stringify({ text, vision: false }), { headers: CORS })
     }
 

@@ -1009,30 +1009,26 @@ ipcMain.handle('send-message', async (_, { message }) => {
       console.log('[IRIS] Error capturando screenshot:', e.message)
     }
   } else {
-    console.log('[IRIS] Sin captura → Groq texto puro')
+    console.log('[IRIS] Sin captura → Gemini texto + Google Search')
   }
 
-  // 3. Buscar recuerdo vectorial relevante (si existe)
-  const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
-  const vectorContext = await buscarRecuerdoVectorial(userId, _processGame, message)
-
-  // 3b. Buscar en la wiki de gaming (solo si hay proceso de juego detectado y sin screenshot)
+  // 3. Buscar en la wiki de gaming (solo si hay proceso de juego detectado y sin screenshot)
   const { searchWiki } = require('./wikiSearch')
   const wikiContext = (!screenshotBase64 && _processGame)
     ? await searchWiki(_processGame, message).catch(() => null)
     : null
 
-  // 3c. Consultar API en tiempo real del juego activo (precios, stats live)
+  // 3b. Consultar API en tiempo real del juego activo (precios, stats live)
   const { getGameApi } = require('./gameApis/index')
   const gameApi = getGameApi(_processGame || null)
   const liveContext = (gameApi && !screenshotBase64)
     ? await gameApi.fetchContext(message).catch(() => null)
     : null
 
-  // 4. Llamar al modelo correspondiente
+  // 4. Llamar a Gemini — flujo directo sin capas intermedias
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName, _processGame || null)
+    aiResult = await askGemini(message, screenshotBase64, recentHistory, wikiContext, liveContext, userName)
   } catch (e) {
     throw new Error('Gemini: ' + (e.message || String(e)))
   }
@@ -1147,7 +1143,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   const { transcribeAudio }                           = require('./voiceListener')
   const { askGemini, detectarNecesidadVisual }        = require('./gemini')
   const { getMemory, saveMemory, getRawMemory, detectGameFromText } = require('./memory')
-  const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
+  const { guardarRecuerdoVectorial } = require('./vectorMemory')
   const { detectRunningGame } = require('./gameDetector')
 
   const userId = getActiveUserId()
@@ -1215,8 +1211,6 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     } catch (_) {}
   }
 
-  const vectorContext = await buscarRecuerdoVectorial(userId, _processGame, message)
-
   const { searchWiki } = require('./wikiSearch')
   const wikiContext = (!screenshotBase64 && _processGame)
     ? await searchWiki(_processGame, message).catch(() => null)
@@ -1228,10 +1222,10 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     ? await gameApi.fetchContext(message).catch(() => null)
     : null
 
-  // 3. Llamar al modelo
+  // 3. Llamar a Gemini — flujo directo sin capas intermedias
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName, _processGame || null)
+    aiResult = await askGemini(message, screenshotBase64, recentHistory, wikiContext, liveContext, userName)
   } catch (e) {
     return { error: 'Error IA: ' + e.message }
   }
