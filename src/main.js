@@ -1014,17 +1014,17 @@ ipcMain.handle('send-message', async (_, { message }) => {
 
   // 3. Buscar recuerdo vectorial relevante (si existe)
   const { buscarRecuerdoVectorial, guardarRecuerdoVectorial } = require('./vectorMemory')
-  const vectorContext = await buscarRecuerdoVectorial(userId, chat.game, message)
+  const vectorContext = await buscarRecuerdoVectorial(userId, _processGame, message)
 
-  // 3b. Buscar en la wiki de gaming (solo si hay juego activo y sin screenshot)
+  // 3b. Buscar en la wiki de gaming (solo si hay proceso de juego detectado y sin screenshot)
   const { searchWiki } = require('./wikiSearch')
-  const wikiContext = (!screenshotBase64 && chat.game)
-    ? await searchWiki(chat.game, message).catch(() => null)
+  const wikiContext = (!screenshotBase64 && _processGame)
+    ? await searchWiki(_processGame, message).catch(() => null)
     : null
 
   // 3c. Consultar API en tiempo real del juego activo (precios, stats live)
   const { getGameApi } = require('./gameApis/index')
-  const gameApi = getGameApi(chat.game)
+  const gameApi = getGameApi(_processGame || null)
   const liveContext = (gameApi && !screenshotBase64)
     ? await gameApi.fetchContext(message).catch(() => null)
     : null
@@ -1215,15 +1215,15 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     } catch (_) {}
   }
 
-  const vectorContext = await buscarRecuerdoVectorial(userId, chat.game, message)
+  const vectorContext = await buscarRecuerdoVectorial(userId, _processGame, message)
 
   const { searchWiki } = require('./wikiSearch')
-  const wikiContext = (!screenshotBase64 && chat.game)
-    ? await searchWiki(chat.game, message).catch(() => null)
+  const wikiContext = (!screenshotBase64 && _processGame)
+    ? await searchWiki(_processGame, message).catch(() => null)
     : null
 
   const { getGameApi } = require('./gameApis/index')
-  const gameApi = getGameApi(chat.game)
+  const gameApi = getGameApi(_processGame || null)
   const liveContext = (gameApi && !screenshotBase64)
     ? await gameApi.fetchContext(message).catch(() => null)
     : null

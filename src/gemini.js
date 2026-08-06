@@ -98,6 +98,9 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   }
   messages.push({ role: 'user', content: userText })
 
+  // Modo libre: sin juego activo, sin wiki, sin vector → temperatura alta para respuesta más libre
+  const temperature = (!activeGame && !wikiContext && !vectorContext) ? 0.7 : 0.45
+
   try {
     const data = await edgeFetch({
       type: 'grounded-chat',
@@ -106,6 +109,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
       chatHistory: (recentHistory || []).map(e => ({ question: e.question, answer: e.answer })),
       messages,        // Groq fallback dentro del Edge Function si Gemini falla
       max_tokens: 500,
+      temperature,
     })
     return { text: data.text, vision: false }
   } catch (err) {
