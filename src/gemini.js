@@ -1,5 +1,3 @@
-const { searchWeb } = require('./search')
-
 const EDGE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '') + '/functions/v1/ai-chat'
 const EDGE_KEY = process.env.SUPABASE_ANON_KEY || ''
 
@@ -54,28 +52,8 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
   // La memoria histórica queda como contexto de notas, no determina el juego activo.
   const game = activeGame || null
 
-  // Skip web search en visión (Gemini ya ve la pantalla) o mensajes cortos/sociales
-  let searchContext = ''
-  const shouldSearch = !screenshotBase64 && !SOCIAL_RE.test(message.trim())
-  if (shouldSearch) {
-    try {
-      // Si el mensaje es corto y parece pregunta de seguimiento, enriquecemos con la última pregunta del historial
-      let queryBase = message
-      if (message.length < 40 && recentHistory && recentHistory.length > 0) {
-        const lastQ = recentHistory[recentHistory.length - 1]?.question || ''
-        if (lastQ.length > 10) queryBase = `${lastQ} ${message}`
-      }
-      const query = game ? `${game} ${queryBase} guia` : `${queryBase} videojuego`
-      const results = await searchWeb(query, game)
-      if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
-        searchContext = `\n\n[Información web actualizada]:\n${results}`
-      }
-      console.log(`[IRIS:SEARCH] query="${query.slice(0,80)}" → ${searchContext ? `${searchContext.length} chars` : 'sin resultados'}`)
-    } catch (_) {}
-  }
-
   const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext, wikiContext, userName)
-  const userText = message + (liveContext ? `\n\n${liveContext}` : '') + searchContext
+  const userText = message + (liveContext ? `\n\n${liveContext}` : '')
 
   // ── DIAGNÓSTICO DE CONTEXTO ──────────────────────────────────────────────
   console.log(`[IRIS:CTX] juego="${game || 'null'}" | wiki=${wikiContext ? `"${wikiContext.title}"` : 'null'} | vector=${vectorContext ? 'sí' : 'null'} | live=${liveContext ? 'sí' : 'null'} | vision=${!!screenshotBase64}`)
