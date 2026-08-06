@@ -64,11 +64,16 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
       if (results && results.length > 60 && results !== 'Sin resultados.' && !results.startsWith('Error')) {
         searchContext = `\n\n[Información web actualizada]:\n${results}`
       }
+      console.log(`[IRIS:SEARCH] query="${query.slice(0,80)}" → ${searchContext ? `${searchContext.length} chars` : 'sin resultados'}`)
     } catch (_) {}
   }
 
   const systemPrompt = buildSystemPrompt(game, memoryContext, vectorContext, wikiContext, userName)
   const userText = message + (liveContext ? `\n\n${liveContext}` : '') + searchContext
+
+  // ── DIAGNÓSTICO DE CONTEXTO ──────────────────────────────────────────────
+  console.log(`[IRIS:CTX] juego="${game || 'null'}" | wiki=${wikiContext ? `"${wikiContext.title}"` : 'null'} | vector=${vectorContext ? 'sí' : 'null'} | live=${liveContext ? 'sí' : 'null'} | vision=${!!screenshotBase64}`)
+  console.log(`[IRIS:CTX] systemPrompt (${systemPrompt.length} chars) ↓\n${systemPrompt.slice(0, 300)}…`)
 
   // Visión con Gemini — inyecta historial reciente en el systemPrompt para mantener contexto
   if (screenshotBase64) {
@@ -100,6 +105,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
 
   // Modo libre: sin juego activo, sin wiki, sin vector → temperatura alta para respuesta más libre
   const temperature = (!activeGame && !wikiContext && !vectorContext) ? 0.7 : 0.45
+  console.log(`[IRIS:CTX] temperatura=${temperature} | modo=${temperature === 0.7 ? 'LIBRE (sin contexto propio)' : 'ANCLADO (con contexto)'}`)
 
   try {
     const data = await edgeFetch({
