@@ -1075,7 +1075,6 @@
         group.querySelector('.bubble-a').innerHTML = renderMarkdown(response)
         if (result?.currentGame) {
           document.getElementById('game-label').textContent = `Juego: ${result.currentGame}`
-          await checkGameTip(result.currentGame)
         }
       } catch (e) {
         group.querySelector('.bubble-a').textContent = 'Error al conectar. Intenta de nuevo.'
@@ -1216,7 +1215,6 @@
           group.querySelector('.bubble-a').innerHTML = renderMarkdown(result.response)
           if (result.currentGame) {
             document.getElementById('game-label').textContent = `Juego: ${result.currentGame}`
-            checkGameTip(result.currentGame)
           }
         }
       } catch (e) {
@@ -1404,18 +1402,6 @@
       loadSettings()
     }
 
-    const BORDERLESS_TIPS = {
-      'league of legends': 'Para usar Iris con League of Legends, poné el juego en modo Sin bordes: ESC → Configuración → Video → Modo de pantalla → Sin bordes.',
-      'valorant':          'Para usar Iris con Valorant, poné el juego en modo Sin bordes: Configuración → Video → Modo de pantalla → Sin bordes.',
-      'cs2':               'Para usar Iris con CS2, activá Ventana sin bordes en Ajustes → Video → Modo de visualización.',
-      'counter-strike':    'Para usar Iris con Counter-Strike, activá Ventana sin bordes en Ajustes → Video → Modo de visualización.',
-      'fortnite':          'Para usar Iris con Fortnite, activá Ventana sin borde en Configuración → Video → Modo de ventana.',
-      'apex legends':      'Para usar Iris con Apex, poné el juego en Sin bordes: Ajustes → Video → Modo de visualización.',
-      'overwatch':         'Para usar Iris con Overwatch, activá Ventana sin bordes en Opciones → Video.',
-      'warzone':           'Para usar Iris con Warzone, activá Ventana sin bordes en Opciones → Gráficos → Modo de pantalla.',
-      'rainbow six':       'Para usar Iris con Rainbow Six, activá Sin bordes en Ajustes → Pantalla → Modo de pantalla.',
-    }
-
     // ─── Snackbar reutilizable ────────────────────────────────────────────────
     let _snackbarOnCta = null
 
@@ -1446,27 +1432,6 @@
     document.getElementById('snackbar-cta').addEventListener('click', () => {
       if (_snackbarOnCta) _snackbarOnCta()
     })
-
-    // ─── Tip de juego ─────────────────────────────────────────────────────────
-    let _currentTipKey = null
-
-    async function checkGameTip(gameName) {
-      const gameLow = (gameName || '').toLowerCase()
-      const tipKey  = Object.keys(BORDERLESS_TIPS).find(k => gameLow.includes(k))
-      if (!tipKey) return
-      _currentTipKey = tipKey
-      const dismissed = await window.api.invoke('get-tip-dismissed', tipKey)
-      if (dismissed) return
-      showSnackbar({
-        title:    'Configuración recomendada',
-        body:     BORDERLESS_TIPS[tipKey],
-        ctaLabel: 'No avisarme más',
-        onCta:    async () => {
-          await window.api.invoke('dismiss-tip', _currentTipKey)
-          snackbarClose()
-        }
-      })
-    }
 
     // ─── Feedback ─────────────────────────────────────────────────────────────
 
@@ -1542,7 +1507,6 @@
       const game = await window.api.invoke('get-current-game').catch(() => null)
       if (game) {
         document.getElementById('game-label').textContent = `Juego: ${game}`
-        checkGameTip(game)
       }
     })
 
