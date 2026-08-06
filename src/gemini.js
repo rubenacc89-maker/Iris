@@ -56,7 +56,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
 
   // Skip web search en visión (Gemini ya ve la pantalla) o mensajes cortos/sociales
   let searchContext = ''
-  const shouldSearch = !screenshotBase64 && message.length > 20 && !SOCIAL_RE.test(message.trim())
+  const shouldSearch = !screenshotBase64 && !SOCIAL_RE.test(message.trim())
   if (shouldSearch) {
     try {
       const query = game ? `${game} ${message} patch build guia` : `${message} videojuego guia`
