@@ -9,11 +9,10 @@ const CORS = {
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODELS = ['llama-3.1-8b-instant', 'llama3-8b-8192', 'gemma2-9b-it']
 const GEMINI_MODELS_VISION = [
-  'gemini-2.5-flash-preview',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash-latest',
+  'gemini-flash-latest',
+  'gemini-3.6-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
 ]
 
 async function callGroq(messages: unknown[], max_tokens: number, single_model?: string): Promise<string> {
@@ -77,6 +76,74 @@ async function callGemini(systemPrompt: string, userText: string, screenshotBase
   throw new Error('Ningún modelo Gemini disponible para visión con esta API key')
 }
 
+async function callGeminiEmbed(text: string, taskType: string): Promise<number[]> {
+  const key = Deno.env.get('GEMINI_API_KEY')
+  if (!key) throw new Error('GEMINI_API_KEY no configurada en Edge Function')
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${key}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: { parts: [{ text }] },
+      taskType,
+    }),
+  })
+
+  if (!res.ok) {
+    const txt = await res.text()
+    throw new Error(`Embed Gemini ${res.status}: ${txt.substring(0, 200)}`)
+  }
+
+  const data = await res.json()
+  return data.embedding.values
+}
+
+async function callGeminiGrounded(systemPrompt: string, userText: string, chatHistory: {question: string, answer: string}[], max_tokens: number, groqMessages: unknown[]): Promise<string> {
+  const key = Deno.env.get('GEMINI_API_KEY')
+  if (!key) throw new Error('GEMINI_API_KEY no configurada en Edge Function')
+
+  const contents: unknown[] = []
+  for (const h of (chatHistory || [])) {
+    contents.push({ role: 'user',  parts: [{ text: h.question }] })
+    contents.push({ role: 'model', parts: [{ text: h.answer   }] })
+  }
+  contents.push({ role: 'user', parts: [{ text: userText }] })
+
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents,
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: max_tokens },
+  })
+
+  for (const model of GEMINI_MODELS_VISION) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+
+    if (res.status === 404 || res.status === 429) {
+      console.log(`[ai-chat] Gemini grounded ${model} ${res.status}, probando siguiente...`)
+      continue
+    }
+    if (!res.ok) {
+      const txt = await res.text()
+      console.log(`[ai-chat] Gemini grounded ${model} error: ${txt.substring(0, 100)}`)
+      continue
+    }
+
+    const data = await res.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+    if (text) {
+      console.log(`[ai-chat] Gemini grounded modelo usado: ${model}`)
+      return text.trim()
+    }
+  }
+
+  // Fallback a Groq si todos los modelos Gemini fallan
+  console.log('[ai-chat] Gemini grounded sin resultado, usando Groq como fallback...')
+  return await callGroq(groqMessages, max_tokens)
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -94,6 +161,20 @@ serve(async (req: Request) => {
     if (type === 'vision' && screenshotBase64) {
       const text = await callGemini(systemPrompt ?? '', userText ?? '', screenshotBase64)
       return new Response(JSON.stringify({ text, vision: true }), { headers: CORS })
+    }
+
+    // Embeddings vectoriales
+    if (type === 'embed') {
+      const { text: embedText, taskType = 'RETRIEVAL_DOCUMENT' } = body
+      const values = await callGeminiEmbed(embedText, taskType)
+      return new Response(JSON.stringify({ values }), { headers: CORS })
+    }
+
+    // Chat con Gemini + Google Search grounding + historial
+    if (type === 'grounded-chat') {
+      const { chatHistory = [], messages: groqMessages } = body
+      const text = await callGeminiGrounded(systemPrompt ?? '', userText ?? '', chatHistory, max_tokens, groqMessages)
+      return new Response(JSON.stringify({ text, vision: false }), { headers: CORS })
     }
 
     // Groq texto con fallback de modelos
