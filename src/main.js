@@ -1032,7 +1032,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
   // 4. Llamar al modelo correspondiente
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName, _processGame || null)
   } catch (e) {
     throw new Error('Gemini: ' + (e.message || String(e)))
   }
@@ -1231,7 +1231,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   // 3. Llamar al modelo
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName, _processGame || null)
   } catch (e) {
     return { error: 'Error IA: ' + e.message }
   }

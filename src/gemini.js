@@ -46,12 +46,13 @@ async function detectarNecesidadVisual(pregunta) {
   }
 }
 
-async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null, liveContext = null, userName = null) {
+async function askGemini(message, screenshotBase64, memory, recentHistory, vectorContext = null, wikiContext = null, liveContext = null, userName = null, activeGame = null) {
   if (!EDGE_KEY) return { text: 'Error: no hay configuración de Supabase en .env', vision: false }
 
   const memoryContext = buildMemoryContext(memory)
-  const gameEntries = Object.entries(memory || {}).filter(([n]) => n && n.toLowerCase() !== 'null').sort((a, b) => (b[1].lastPlayed || 0) - (a[1].lastPlayed || 0))
-  const game = gameEntries[0]?.[0] || ''
+  // game = solo el proceso detectado corriendo ahora. Si no hay juego activo, null.
+  // La memoria histórica queda como contexto de notas, no determina el juego activo.
+  const game = activeGame || null
 
   // Skip web search en visión (Gemini ya ve la pantalla) o mensajes cortos/sociales
   let searchContext = ''
@@ -119,7 +120,7 @@ async function askGemini(message, screenshotBase64, memory, recentHistory, vecto
 
 function buildSystemPrompt(game, memoryContext, vectorContext, wikiContext = null, userName = null) {
   const nombre = userName ? userName.split(' ')[0] : null
-  return `${game ? `JUEGO ACTIVO: ${game}\nSi la pregunta es sobre videojuegos, respondé sobre ${game}. Si la pregunta es sobre otra cosa, ayudá igual.\n\n` : ''}${nombre ? `USUARIO: ${nombre}. Cuando uses un nombre al final de una respuesta o saludo, usá "${nombre}", NUNCA "Iris".\n\n` : ''}Sos Iris, copiloto táctico de gaming. Respondés rápido, preciso y con tono de compañero de equipo. Sin rodeos, sin formalidades.
+  return `${game ? `JUEGO DETECTADO EN SEGUNDO PLANO: ${game}\n- Si el usuario menciona explícitamente otro juego en su mensaje, respondé sobre ese juego. Ignorá el juego detectado.\n- Solo asumí que la pregunta es sobre ${game} si el usuario no especifica ningún juego.\n\n` : ''}${nombre ? `USUARIO: ${nombre}. Cuando uses un nombre al final de una respuesta o saludo, usá "${nombre}", NUNCA "Iris".\n\n` : ''}Sos Iris, copiloto táctico de gaming. Respondés rápido, preciso y con tono de compañero de equipo. Sin rodeos, sin formalidades.
 
 REGLAS DE RESPUESTA:
 - Social/confirmación ("ok", "dale", "gracias", "chao", "joya", "np"): respuesta corta y natural, máximo 1 oración. NUNCA repitas el consejo anterior.
