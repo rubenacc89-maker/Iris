@@ -59,13 +59,10 @@ async function callGemini(systemPrompt: string, userText: string, screenshotBase
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
 
-    if (res.status === 404) {
-      console.log(`[ai-chat] Gemini modelo ${model} no encontrado, probando siguiente...`)
-      continue
-    }
     if (!res.ok) {
       const txt = await res.text()
-      throw new Error(`Gemini ${model} ${res.status}: ${txt.substring(0, 200)}`)
+      console.log(`[ai-chat] Gemini vision ${model} ${res.status}, probando siguiente... ${txt.substring(0, 100)}`)
+      continue
     }
 
     const data = await res.json()
