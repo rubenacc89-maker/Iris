@@ -97,15 +97,9 @@ app.whenReady().then(async () => {
   // setupUpdaterWithSplash() called above for !isDev
 })
 
-// Re-asercionar always-on-top cada 1.5s por si el juego lo pisa
-setInterval(() => {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  }
-  if (historyWindow && !historyWindow.isDestroyed()) {
-    historyWindow.setAlwaysOnTop(true, 'screen-saver')
-  }
-}, 5000)
+// NOTA: El interval de re-aserción fue eliminado — llamar setAlwaysOnTop
+// repetidamente en juegos con fullscreen exclusivo (ej GTA V) causa que Windows
+// minimice el juego. El flag alwaysOnTop de Electron es persistente y no necesita reafirmarse.
 
 app.on('will-quit', () => {
   uIOhook.stop()
@@ -953,6 +947,8 @@ ipcMain.handle('send-message', async (_, { message }) => {
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
+  const _session = store.get('user_session') || tempSession
+  const userName = _session?.name || _session?.email?.split('@')[0] || null
 
   // Detectar juego: proceso activo tiene prioridad sobre texto (evita confusión entre juegos)
   const _processGame = detectRunningGame()
@@ -1036,7 +1032,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
   // 4. Llamar al modelo correspondiente
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName)
   } catch (e) {
     throw new Error('Gemini: ' + (e.message || String(e)))
   }
@@ -1156,6 +1152,8 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
 
   const userId = getActiveUserId()
   const memory = getMemory(userId)
+  const _sessionV = store.get('user_session') || tempSession
+  const userName = _sessionV?.name || _sessionV?.email?.split('@')[0] || null
 
   // 1. Transcribir audio con Groq Whisper
   let message
@@ -1206,8 +1204,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     }
   }
 
-  // 2. Clasificar y obtener contexto vectorial
-
+  // 2. Clasificar y obtener contexto visual
   const necesitaVision = await detectarNecesidadVisual(message)
   let screenshotBase64 = null
   if (necesitaVision) {
@@ -1234,7 +1231,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   // 3. Llamar al modelo
   let aiResult
   try {
-    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext)
+    aiResult = await askGemini(message, screenshotBase64, memory, recentHistory, vectorContext, wikiContext, liveContext, userName)
   } catch (e) {
     return { error: 'Error IA: ' + e.message }
   }
