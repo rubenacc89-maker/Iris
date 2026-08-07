@@ -129,16 +129,26 @@ async function callGeminiGrounded(systemPrompt: string, userText: string, chatHi
     }
 
     const data = await res.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+    const parts = data.candidates?.[0]?.content?.parts || []
+    const text = parts.find((p: {text?: string}) => p.text)?.text || null
     if (text) {
       console.log(`[ai-chat] Gemini grounded modelo usado: ${model}`)
       return text.trim()
     }
+    console.log(`[ai-chat] Gemini grounded ${model} sin texto: ${JSON.stringify(data).substring(0, 300)}`)
   }
 
-  // Fallback a Groq si todos los modelos Gemini fallan
+  // Fallback a Groq si todos los modelos Gemini fallan — construir mensajes desde los datos disponibles
   console.log('[ai-chat] Gemini grounded sin resultado, usando Groq como fallback...')
-  return await callGroq(groqMessages, max_tokens)
+  const fallbackMessages = [
+    { role: 'system', content: systemPrompt },
+    ...chatHistory.flatMap((h: {question: string, answer: string}) => [
+      { role: 'user', content: h.question },
+      { role: 'assistant', content: h.answer }
+    ]),
+    { role: 'user', content: userText }
+  ]
+  return await callGroq(groqMessages ?? fallbackMessages, max_tokens)
 }
 
 serve(async (req: Request) => {
