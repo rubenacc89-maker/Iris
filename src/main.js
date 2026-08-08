@@ -955,13 +955,11 @@ ipcMain.handle('send-message', async (_, { message }) => {
   if (_processGame) {
     if (!memory[_processGame]) memory[_processGame] = { notes: [], lastPlayed: Date.now() }
     else memory[_processGame].lastPlayed = Date.now()
-    switchToGameSession(userId, _processGame)
   } else {
     const _quickGame = detectGameFromText(message)
     if (_quickGame) {
       if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
       else memory[_quickGame].lastPlayed = Date.now()
-      switchToGameSession(userId, _quickGame)
     }
   }
 
@@ -1013,6 +1011,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
   }
 
   // 3. Buscar en la wiki de gaming (solo si hay proceso de juego detectado y sin screenshot)
+  const { guardarRecuerdoVectorial } = require('./vectorMemory')
   const { searchWiki } = require('./wikiSearch')
   const wikiContext = (!screenshotBase64 && _processGame)
     ? await searchWiki(_processGame, message).catch(() => null)
@@ -1166,13 +1165,11 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
   if (_processGame) {
     if (!memory[_processGame]) memory[_processGame] = { notes: [], lastPlayed: Date.now() }
     else memory[_processGame].lastPlayed = Date.now()
-    switchToGameSession(userId, _processGame)
   } else {
     const _quickGame = detectGameFromText(message)
     if (_quickGame) {
       if (!memory[_quickGame]) memory[_quickGame] = { notes: [], lastPlayed: Date.now() }
       else memory[_quickGame].lastPlayed = Date.now()
-      switchToGameSession(userId, _quickGame)
     }
   }
 
