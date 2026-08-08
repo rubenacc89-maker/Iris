@@ -1012,10 +1012,7 @@ ipcMain.handle('send-message', async (_, { message }) => {
 
   // 3. Buscar en la wiki de gaming (solo si hay proceso de juego detectado y sin screenshot)
   const { guardarRecuerdoVectorial } = require('./vectorMemory')
-  const { searchWiki } = require('./wikiSearch')
-  const wikiContext = (!screenshotBase64 && _processGame)
-    ? await searchWiki(_processGame, message).catch(() => null)
-    : null
+  const wikiContext = null // desactivado temporalmente — flujo en revisión
 
   // 3b. Consultar API en tiempo real del juego activo (precios, stats live)
   const { getGameApi } = require('./gameApis/index')
@@ -1208,10 +1205,7 @@ ipcMain.handle('voice-command', async (_, { audioBase64 }) => {
     } catch (_) {}
   }
 
-  const { searchWiki } = require('./wikiSearch')
-  const wikiContext = (!screenshotBase64 && _processGame)
-    ? await searchWiki(_processGame, message).catch(() => null)
-    : null
+  const wikiContext = null // desactivado temporalmente — flujo en revisión
 
   const { getGameApi } = require('./gameApis/index')
   const gameApi = getGameApi(_processGame || null)
